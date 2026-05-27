@@ -169,7 +169,18 @@ const auth = {
 
 const functions = {
   invoke: async (name, payload) => {
-    throw new Error(`Supabase function '${name}' is not configured. Implement this using Supabase Edge Functions or remove the dependent feature.`);
+    const { data, error } = await supabase.functions.invoke(name, {
+      body: payload ? JSON.stringify(payload) : undefined,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
   }
 };
 
@@ -179,8 +190,8 @@ const integrations = {
       console.warn('SendEmail is not configured. Add a Supabase Edge Function or a third-party email provider to enable this feature.');
       return { success: false, message: 'SendEmail not configured' };
     },
-    InvokeLLM: async () => {
-      throw new Error('LLM integration is not configured. Add a custom Supabase function or external API to enable AI features.');
+    InvokeLLM: async (payload) => {
+      return functions.invoke('invokeLLM', payload);
     }
   }
 };
