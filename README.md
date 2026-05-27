@@ -1,39 +1,29 @@
-**Welcome to your Base44 project** 
+**Welcome to your Supabase-backed thoughtful app**
 
 **About**
 
-View and Edit  your app on [Base44.com](http://Base44.com) 
-
-This project contains everything you need to run your app locally.
+This repository has been migrated to use Supabase for authentication and data storage instead of Base44.
 
 **Edit the code in your local development environment**
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
-
-**Prerequisites:** 
-
-1. Clone the repository using the project's Git URL 
+1. Clone the repository using the project's Git URL
 2. Navigate to the project directory
 3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
+4. Create an `.env.local` file and set the Supabase environment variables
 
 ```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
-
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
 Run the app: `npm run dev`
 
-**Publish your changes**
+**Notes**
 
-Open [Base44.com](http://Base44.com) and click on Publish.
+- Authentication is now handled through Supabase Auth.
+- Data operations are mapped to Supabase tables using a compatibility layer.
+- Some Base44-specific features such as email sending, checkout, and AI integrations are stubbed and require additional Supabase Edge Function or third-party configuration.
 
-**Docs & Support**
+**Supabase docs**
 
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
-
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+https://supabase.com/docs
