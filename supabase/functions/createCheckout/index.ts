@@ -1,4 +1,4 @@
-import { serve } from 'https://deno.land/std@0.203.0/server/mod.ts';
+import { serve } from 'jsr:std/server';
 import Stripe from 'npm:stripe@14';
 import { createClient } from 'npm:@supabase/supabase-js';
 
