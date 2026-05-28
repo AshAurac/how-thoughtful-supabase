@@ -10,7 +10,7 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview",
-    "deploy": "NODE_TLS_REJECT_UNAUTHORIZED=0 vercel --prod",
+    "deploy": "NODE_TLS_REJECT_UNAUTHORIZED=0 npx vercel --prod",
     "deploy:confirm": "node scripts/deploy-confirm.mjs"
   },
   "dependencies": {
