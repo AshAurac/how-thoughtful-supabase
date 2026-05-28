@@ -35,6 +35,8 @@ import JoinEventPage from './pages/JoinEventPage';
 import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
 import LoginPage from './pages/LoginPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsPage from './pages/TermsPage';
 
 // Layout
 import AppShell from './components/AppShell';
@@ -94,6 +96,8 @@ const AuthenticatedApp = () => {
       <Route path="/join-event/:token" element={<JoinEventPage />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/contact" element={<ContactPage />} />
+      <Route path="/privacy" element={<PrivacyPolicyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
       <Route path="/welcome" element={<LandingPage />} />
 
       {/* Home: show landing if not authenticated, dashboard if authenticated */}

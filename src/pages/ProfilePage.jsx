@@ -382,6 +382,16 @@ export default function ProfilePage({ user }) {
 
       <FeedbackCard user={user} />
 
+      <footer className="rounded-3xl border border-border bg-card px-5 py-4 text-center">
+        <p className="text-xs text-muted-foreground mb-2">Helpful links</p>
+        <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
+          <Link to="/about" className="hover:text-foreground transition-colors">About</Link>
+          <Link to="/contact" className="hover:text-foreground transition-colors">Contact</Link>
+          <Link to="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+          <Link to="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>
+        </div>
+      </footer>
+
       <button
         onClick={() => base44.auth.logout('/')}
         className="w-full flex items-center justify-center gap-2 py-4 rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all font-body text-sm select-none min-h-[44px]"

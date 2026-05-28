@@ -323,9 +323,11 @@ export default function LandingPage() {
           <img src="https://media.base44.com/images/public/6a1188b0e669a81e5b3530ea/5247e49c3_RealLogo.png" alt="How Thoughtful" className="w-6 h-6" />
           <span className="font-heading font-bold text-white text-sm">How Thoughtful</span>
         </div>
-        <div className="flex items-center justify-center gap-4 mt-3 mb-2">
+        <div className="flex flex-wrap items-center justify-center gap-4 mt-3 mb-2">
           <Link to="/about" className="text-white/60 text-xs hover:text-white transition-all">About</Link>
           <Link to="/contact" className="text-white/60 text-xs hover:text-white transition-all">Contact</Link>
+          <Link to="/privacy" className="text-white/60 text-xs hover:text-white transition-all">Privacy Policy</Link>
+          <Link to="/terms" className="text-white/60 text-xs hover:text-white transition-all">Terms of Service</Link>
         </div>
         <p className="text-white/40 text-xs">Made for people who care about the people they love.</p>
       </footer>
