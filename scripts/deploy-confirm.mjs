@@ -45,6 +45,8 @@ rl.close();
 run('git', ['add', '.']);
 run('git', ['commit', '-m', 'chore: deploy updates']);
 run('git', ['push']);
-run('vercel', ['--prod']);
+run('vercel', ['--prod'], {
+  env: { ...process.env, NODE_TLS_REJECT_UNAUTHORIZED: '0' },
+});
 
 console.log('\nDeployment complete.');
