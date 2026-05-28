@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { LogOut, Trash2, AlertTriangle, Sun, Moon, Sparkles, Mail, CheckCircle2, Plus, X } from 'lucide-react';
+import { LogOut, Trash2, AlertTriangle, Sun, Moon, Sparkles, Mail, CheckCircle2, Plus, X, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { LOVE_LANGUAGES } from '@/lib/catalogs';
 import NativePicker from '@/components/NativePicker';
@@ -34,6 +34,7 @@ export default function ProfilePage({ user }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDark, toggleDark] = useDarkMode();
   const [verifyState, setVerifyState] = useState('idle'); // idle | sending | sent
+  const [verificationBusy, setVerificationBusy] = useState(false);
   const [customSkill, setCustomSkill] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const { isUnlocked, toggle: toggleFeature } = useFeatureFlags(user);
@@ -287,37 +288,53 @@ export default function ProfilePage({ user }) {
       )}
 
       {/* Email verification */}
-      <div className="bg-card border border-border rounded-2xl px-5 py-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-          <div>
-            <p className="text-sm font-body text-foreground">{user?.email}</p>
-            <p className="text-xs text-muted-foreground">Send a test email to verify delivery</p>
+      <div className="bg-card border border-border rounded-2xl px-5 py-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            <div>
+              <p className="text-sm font-body text-foreground">{user?.email}</p>
+              <p className="text-xs text-muted-foreground">Verification status for your account</p>
+            </div>
           </div>
+          {user?.email_confirmed_at ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold">
+              <ShieldCheck className="w-3.5 h-3.5" /> Verified
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-3 py-1 text-xs font-semibold">
+              <ShieldAlert className="w-3.5 h-3.5" /> Unverified
+            </span>
+          )}
         </div>
-        {verifyState === 'sent' ? (
-          <div className="flex items-center gap-1 text-moss text-xs font-medium shrink-0">
-            <CheckCircle2 className="w-4 h-4" /> Sent!
-          </div>
-        ) : (
-          <button
-            type="button"
-            disabled={verifyState === 'sending'}
-            onClick={async () => {
-              setVerifyState('sending');
-              await base44.integrations.Core.SendEmail({
-                to: user.email,
-                subject: 'How Thoughtful — email verified ✅',
-                body: `Hi ${user?.full_name?.split(' ')[0] || 'there'},\n\nYour email is working perfectly! You'll receive reminders and invites at this address.\n\n— How Thoughtful 💛`,
-              });
-              setVerifyState('sent');
-              toast.success('Test email sent — check your inbox!');
-            }}
-            className="shrink-0 text-xs font-heading font-semibold text-terracotta border border-terracotta/40 px-3 py-1.5 rounded-full hover:bg-terracotta hover:text-white transition-all disabled:opacity-60"
-          >
-            {verifyState === 'sending' ? 'Sending…' : 'Send test'}
-          </button>
-        )}
+
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/40 px-3 py-3">
+          <p className="text-xs text-muted-foreground">
+            {user?.email_confirmed_at
+              ? 'Your email is verified and you can continue with purchases and premium features.'
+              : 'You can still use the app, but checkout and premium features require email verification.'}
+          </p>
+          {!user?.email_confirmed_at && (
+            <button
+              type="button"
+              disabled={verificationBusy}
+              onClick={async () => {
+                try {
+                  setVerificationBusy(true);
+                  await base44.auth.resendVerificationEmail(user.email);
+                  toast.success('Verification email sent — check your inbox.');
+                } catch (error) {
+                  toast.error(error?.message || 'Could not send verification email.');
+                } finally {
+                  setVerificationBusy(false);
+                }
+              }}
+              className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-all disabled:opacity-60"
+            >
+              {verificationBusy ? 'Sending…' : 'Resend Verification Email'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Features panel */}

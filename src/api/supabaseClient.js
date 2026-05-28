@@ -138,15 +138,36 @@ const auth = {
     };
   },
   register: async ({ email, password }) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: window.location.origin
+      }
+    });
+    if (error) throw error;
+    return data;
+  },
+  resendVerificationEmail: async (email) => {
+    const { data, error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: {
+        emailRedirectTo: window.location.origin
+      }
+    });
     if (error) throw error;
     return data;
   },
   loginWithProvider: async (provider, fromUrl) => {
+    const redirectTo = fromUrl && /^https?:\/\//i.test(fromUrl)
+      ? fromUrl
+      : `${window.location.origin}${fromUrl || '/'}`;
+
     return supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: fromUrl || window.location.origin
+        redirectTo
       }
     });
   },

@@ -61,7 +61,7 @@ const PLANS = [
   },
 ];
 
-function CheckoutButton({ product, billing, label, className, user }) {
+function CheckoutButton({ product, billing, label, className, user, onBlocked }) {
   const [loading, setLoading] = useState(false);
 
   const handleClick = async () => {
@@ -70,6 +70,17 @@ function CheckoutButton({ product, billing, label, className, user }) {
       alert('Checkout only works from the published app — please open it directly in your browser.');
       return;
     }
+
+    if (!user?.email_confirmed_at) {
+      try {
+        await base44.auth.resendVerificationEmail(user.email);
+        onBlocked?.();
+      } catch (error) {
+        toast.error(error?.message || 'Could not send verification email.');
+      }
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await base44.functions.invoke('createCheckout', {
@@ -98,6 +109,7 @@ function CheckoutButton({ product, billing, label, className, user }) {
 
 export default function UpgradePage({ user }) {
   const [billing, setBilling] = useState('annual');
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
   const urlParams = new URLSearchParams(window.location.search);
   const successProduct = urlParams.get('success') === 'true' ? urlParams.get('product') : null;
 
@@ -210,6 +222,7 @@ export default function UpgradePage({ user }) {
                   product={plan.id}
                   billing={billing}
                   user={user}
+                  onBlocked={() => setShowVerificationModal(true)}
                   label={`Get ${plan.name} — ${billing === 'annual' ? 'best value' : 'monthly'}`}
                   className={`w-full py-3.5 rounded-full font-heading font-semibold transition-all hover:-translate-y-0.5 text-sm ${
                     plan.highlight
@@ -228,6 +241,23 @@ export default function UpgradePage({ user }) {
       <div className="text-center text-sm text-muted-foreground pb-2">
         Free tier never goes away — curated ideas are always free.
       </div>
+
+      {showVerificationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowVerificationModal(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div className="relative w-full max-w-md rounded-3xl bg-card border border-border p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-terracotta">Verify your email first</p>
+            <h3 className="mt-2 font-heading text-xl font-bold text-foreground">You must verify your email before completing your purchase.</h3>
+            <p className="mt-3 text-sm text-muted-foreground">We just sent a fresh verification link to your inbox. Please confirm it, then try your upgrade again.</p>
+            <button
+              onClick={() => setShowVerificationModal(false)}
+              className="mt-5 w-full rounded-full bg-terracotta px-4 py-3 text-sm font-semibold text-white hover:bg-terracotta-dark transition-all"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
 
       <Link
         to="/"

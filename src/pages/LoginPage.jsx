@@ -30,11 +30,17 @@ export default function LoginPage() {
           return;
         }
       } else {
-        await base44.auth.register({ email, password });
-        const result = await base44.auth.loginViaEmailPassword(email, password);
-        if (result.access_token) {
+        const result = await base44.auth.register({ email, password });
+
+        if (result?.session) {
           await checkUserAuth();
           window.location.href = fromUrl;
+          return;
+        }
+
+        if (result?.user) {
+          setError('Please check your email and confirm your account before signing in.');
+          setMode('login');
           return;
         }
       }
