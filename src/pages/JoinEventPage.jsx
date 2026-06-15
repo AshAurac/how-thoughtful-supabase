@@ -33,12 +33,12 @@ export default function JoinEventPage() {
         } catch {}
 
         const res = await base44.functions.invoke('acceptEventInvite', { token });
-        if (res.data?.event_id) {
+        if (res?.event_id) {
           setStatus('success');
-          setTimeout(() => navigate(`/events/${res.data.event_id}`), 2000);
+          setTimeout(() => navigate(`/events/${res.event_id}`), 2000);
         } else {
           setStatus('error');
-          setMessage(res.data?.error || 'Something went wrong.');
+          setMessage(res?.error || 'Something went wrong.');
         }
       } catch (err) {
         setStatus('error');

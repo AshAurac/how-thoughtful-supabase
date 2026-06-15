@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
-import { parseISO, isValid, format, addDays } from 'date-fns';
+import { parseISO, isValid, format } from 'date-fns';
 import PriorityBadge from '@/components/PriorityBadge';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 

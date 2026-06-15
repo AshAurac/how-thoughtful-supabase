@@ -8,7 +8,11 @@ const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY');
 
 const PRICE_IDS: Record<string, string> = {
   monthly: Deno.env.get('STRIPE_PRICE_MONTHLY') || 'price_monthly_placeholder',
-  annual: Deno.env.get('STRIPE_PRICE_ANNUAL') || 'price_annual_placeholder'
+  annual: Deno.env.get('STRIPE_PRICE_ANNUAL') || 'price_annual_placeholder',
+  individual_monthly: Deno.env.get('STRIPE_PRICE_INDIVIDUAL_MONTHLY') || Deno.env.get('STRIPE_PRICE_MONTHLY') || 'price_individual_monthly_placeholder',
+  individual_annual: Deno.env.get('STRIPE_PRICE_INDIVIDUAL_ANNUAL') || Deno.env.get('STRIPE_PRICE_ANNUAL') || 'price_individual_annual_placeholder',
+  family_monthly: Deno.env.get('STRIPE_PRICE_FAMILY_MONTHLY') || 'price_family_monthly_placeholder',
+  family_annual: Deno.env.get('STRIPE_PRICE_FAMILY_ANNUAL') || 'price_family_annual_placeholder'
 };
 
 const supabaseAdmin = createClient(SUPABASE_URL || '', SUPABASE_SERVICE_KEY || '');
@@ -20,15 +24,22 @@ serve(async (req) => {
     if (!product || !PRICE_IDS[product]) return new Response(JSON.stringify({ error: 'Invalid product' }), { status: 400 });
 
     const priceId = PRICE_IDS[product];
-    const isSubscription = product === 'annual' || product === 'monthly';
+    if (priceId.includes('placeholder')) {
+      return new Response(JSON.stringify({ error: `Stripe price for ${product} is not configured` }), { status: 500 });
+    }
+
+    const [plan, billing] = product.includes('_') ? product.split('_') : ['individual', product];
 
     const sessionParams: any = {
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
-      mode: isSubscription ? 'subscription' : 'payment',
+      mode: 'subscription',
       success_url: success_url || `${req.headers.get('origin')}/upgrade?success=true&product=${product}`,
       cancel_url: cancel_url || `${req.headers.get('origin')}/upgrade`,
-      metadata: { product, user_email: user_email || '' }
+      metadata: { product, plan, billing, user_email: user_email || '' },
+      subscription_data: {
+        metadata: { product, plan, billing, user_email: user_email || '' }
+      }
     };
     if (user_email) sessionParams.customer_email = user_email;
 

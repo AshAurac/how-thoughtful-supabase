@@ -43,7 +43,12 @@ export default function CreateEvent() {
   const mutation = useMutation({
     mutationFn: async (data) => {
       const buyDates = data.event_date ? computeBuyDates(data.event_date) : {};
-      const event = await base44.entities.Event.create({ ...data, ...buyDates, reminders_sent: [] });
+      const event = await base44.entities.Event.create({
+        ...data,
+        recipient_id: selectedRecipientId,
+        ...buyDates,
+        reminders_sent: []
+      });
 
       // Auto-create recipient if not already linked
       if (!selectedRecipientId && data.recipient_name) {

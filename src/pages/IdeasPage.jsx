@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 import { Sparkles, Lightbulb, Bookmark, BookmarkCheck, ExternalLink, ChevronDown, X } from 'lucide-react';
@@ -88,8 +88,9 @@ export default function IdeasPage({ user }) {
   });
 
   const { data: savedIdeas = [] } = useQuery({
-    queryKey: ['savedIdeas'],
-    queryFn: () => base44.entities.SavedIdea.list(),
+    queryKey: ['savedIdeas', user?.email],
+    queryFn: () => base44.entities.SavedIdea.filter({ created_by: user?.email }),
+    enabled: !!user?.email,
   });
 
   const { data: recipients = [] } = useQuery({

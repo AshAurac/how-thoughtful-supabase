@@ -89,8 +89,8 @@ function CheckoutButton({ product, billing, label, className, user, onBlocked })
         success_url: `${window.location.origin}/upgrade?success=true&product=${product}`,
         cancel_url: `${window.location.origin}/upgrade`,
       });
-      if (res.data?.url) {
-        window.location.href = res.data.url;
+      if (res?.url) {
+        window.location.href = res.url;
       } else {
         toast.error('Could not start checkout. Please try again.');
       }

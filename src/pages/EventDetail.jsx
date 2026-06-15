@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus, Trash2, Check, Sparkles, Lightbulb, Pencil, X, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Check, Sparkles, Lightbulb, Pencil, ChevronDown } from 'lucide-react';
 import { formatEventDate, daysUntil, computeBuyDates } from '@/lib/dateUtils';
 import PriorityBadge from '@/components/PriorityBadge';
 import NativePicker from '@/components/NativePicker';

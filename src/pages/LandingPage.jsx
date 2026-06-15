@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
-import { Gift, Calendar, Sparkles, Bell, Heart, Check, Star, ArrowRight, Package, Clock, DollarSign, Smile, BookOpen, Users } from 'lucide-react';
+import { Calendar, Sparkles, Bell, Heart, Check, Star, ArrowRight, Package, Clock, DollarSign, Smile, BookOpen, Users } from 'lucide-react';
 
 const PAIN_POINTS = [
   { icon: Clock, text: "You remember someone's birthday at 11pm the night before and panic." },

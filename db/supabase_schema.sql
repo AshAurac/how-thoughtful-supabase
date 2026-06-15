@@ -21,6 +21,7 @@ create table if not exists user_profiles (
   timezone text,
   is_premium boolean default false,
   premium_type text,
+  premium_since timestamptz,
   monthly_ai_uses int default 0,
   monthly_ai_reset_month text,
   ai_credits int default 0,
@@ -151,6 +152,7 @@ create table if not exists shared_list_items (
   estimated_price text,
   is_claimed boolean default false,
   claimed_by_name text,
+  claimed_by_email text,
   created_by text,
   created_at timestamptz default now()
 );
@@ -170,3 +172,162 @@ create table if not exists wishlists (
 create index if not exists idx_events_created_by on events(created_by);
 create index if not exists idx_shared_lists_share_token on shared_lists(share_token);
 create index if not exists idx_wishlists_share_token on wishlists(share_token);
+
+-- Keep the browser API usable while preventing users from reading each other's private data.
+alter table user_profiles enable row level security;
+alter table recipients enable row level security;
+alter table events enable row level security;
+alter table gifts enable row level security;
+alter table gift_history enable row level security;
+alter table saved_ideas enable row level security;
+alter table shared_lists enable row level security;
+alter table shared_list_items enable row level security;
+alter table wishlists enable row level security;
+
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on
+  user_profiles,
+  recipients,
+  events,
+  gifts,
+  gift_history,
+  saved_ideas,
+  shared_lists,
+  shared_list_items,
+  wishlists
+to authenticated;
+grant select on shared_lists, shared_list_items, wishlists to anon;
+grant update on shared_list_items to anon;
+
+drop policy if exists "Users manage their own profiles" on user_profiles;
+create policy "Users manage their own profiles" on user_profiles
+  for all to authenticated
+  using (created_by = (auth.jwt() ->> 'email') or email = (auth.jwt() ->> 'email'))
+  with check (created_by = (auth.jwt() ->> 'email') or email = (auth.jwt() ->> 'email'));
+
+drop policy if exists "Users manage their own recipients" on recipients;
+create policy "Users manage their own recipients" on recipients
+  for all to authenticated
+  using (created_by = (auth.jwt() ->> 'email'))
+  with check (created_by = (auth.jwt() ->> 'email'));
+
+drop policy if exists "Users manage their own and shared events" on events;
+create policy "Users manage their own and shared events" on events
+  for all to authenticated
+  using (
+    created_by = (auth.jwt() ->> 'email')
+    or (auth.jwt() ->> 'email') = any(collaborator_emails)
+  )
+  with check (
+    created_by = (auth.jwt() ->> 'email')
+    or (auth.jwt() ->> 'email') = any(collaborator_emails)
+  );
+
+drop policy if exists "Users manage accessible gifts" on gifts;
+create policy "Users manage accessible gifts" on gifts
+  for all to authenticated
+  using (
+    created_by = (auth.jwt() ->> 'email')
+    or exists (
+      select 1 from events
+      where events.id = gifts.event_id
+      and (
+        events.created_by = (auth.jwt() ->> 'email')
+        or (auth.jwt() ->> 'email') = any(events.collaborator_emails)
+      )
+    )
+  )
+  with check (
+    created_by = (auth.jwt() ->> 'email')
+    and exists (
+      select 1 from events
+      where events.id = gifts.event_id
+      and (
+        events.created_by = (auth.jwt() ->> 'email')
+        or (auth.jwt() ->> 'email') = any(events.collaborator_emails)
+      )
+    )
+  );
+
+drop policy if exists "Users manage their own gift history" on gift_history;
+create policy "Users manage their own gift history" on gift_history
+  for all to authenticated
+  using (created_by = (auth.jwt() ->> 'email'))
+  with check (created_by = (auth.jwt() ->> 'email'));
+
+drop policy if exists "Users manage their own saved ideas" on saved_ideas;
+create policy "Users manage their own saved ideas" on saved_ideas
+  for all to authenticated
+  using (created_by = (auth.jwt() ->> 'email'))
+  with check (created_by = (auth.jwt() ->> 'email'));
+
+drop policy if exists "Users manage their own shared lists" on shared_lists;
+create policy "Users manage their own shared lists" on shared_lists
+  for all to authenticated
+  using (created_by = (auth.jwt() ->> 'email'))
+  with check (created_by = (auth.jwt() ->> 'email'));
+
+drop policy if exists "Public can read shared lists by token" on shared_lists;
+create policy "Public can read shared lists by token" on shared_lists
+  for select to anon, authenticated
+  using (share_token is not null);
+
+drop policy if exists "Users manage items on their shared lists" on shared_list_items;
+create policy "Users manage items on their shared lists" on shared_list_items
+  for all to authenticated
+  using (
+    created_by = (auth.jwt() ->> 'email')
+    or exists (
+      select 1 from shared_lists
+      where shared_lists.id = shared_list_items.list_id
+      and shared_lists.created_by = (auth.jwt() ->> 'email')
+    )
+  )
+  with check (
+    created_by = (auth.jwt() ->> 'email')
+    or exists (
+      select 1 from shared_lists
+      where shared_lists.id = shared_list_items.list_id
+      and shared_lists.created_by = (auth.jwt() ->> 'email')
+    )
+  );
+
+drop policy if exists "Public can read shared list items" on shared_list_items;
+create policy "Public can read shared list items" on shared_list_items
+  for select to anon, authenticated
+  using (
+    exists (
+      select 1 from shared_lists
+      where shared_lists.id = shared_list_items.list_id
+      and shared_lists.share_token is not null
+    )
+  );
+
+drop policy if exists "Public can claim shared list items" on shared_list_items;
+create policy "Public can claim shared list items" on shared_list_items
+  for update to anon, authenticated
+  using (
+    exists (
+      select 1 from shared_lists
+      where shared_lists.id = shared_list_items.list_id
+      and shared_lists.share_token is not null
+    )
+  )
+  with check (
+    exists (
+      select 1 from shared_lists
+      where shared_lists.id = shared_list_items.list_id
+      and shared_lists.share_token is not null
+    )
+  );
+
+drop policy if exists "Users manage their own wishlists" on wishlists;
+create policy "Users manage their own wishlists" on wishlists
+  for all to authenticated
+  using (created_by = (auth.jwt() ->> 'email'))
+  with check (created_by = (auth.jwt() ->> 'email'));
+
+drop policy if exists "Public can read public wishlists" on wishlists;
+create policy "Public can read public wishlists" on wishlists
+  for select to anon, authenticated
+  using (is_public = true and share_token is not null);

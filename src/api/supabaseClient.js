@@ -27,6 +27,40 @@ const entityTableMap = {
   Wishlist: 'wishlists'
 };
 
+const createdByEntities = new Set(Object.keys(entityTableMap));
+
+const normalizeRow = (row) => {
+  if (!row || typeof row !== 'object') return row;
+  return {
+    ...row,
+    created_date: row.created_date || row.created_at,
+    updated_date: row.updated_date || row.updated_at
+  };
+};
+
+const normalizeRows = (data) => Array.isArray(data) ? data.map(normalizeRow) : data;
+
+const getCurrentUser = async () => {
+  const { data } = await supabase.auth.getUser();
+  return data?.user || null;
+};
+
+const addOwnership = async (entityName, payload) => {
+  if (!createdByEntities.has(entityName) || !payload || payload.created_by) {
+    return payload;
+  }
+
+  const user = await getCurrentUser();
+  if (!user?.email) return payload;
+
+  const next = { ...payload, created_by: user.email };
+  if (entityName === 'UserProfile') {
+    next.email = next.email || user.email;
+    next.full_name = next.full_name || user.user_metadata?.full_name || user.user_metadata?.name || '';
+  }
+  return next;
+};
+
 const applyFilters = (query, filters) => {
   if (!filters || typeof filters !== 'object') {
     return query;
@@ -54,7 +88,12 @@ const applyOrder = (query, orderBy) => {
   orderFields.forEach((field) => {
     if (!field) return;
     const ascending = !field.startsWith('-');
-    const column = field.replace(/^-/, '');
+    const rawColumn = field.replace(/^-/, '');
+    const column = rawColumn === 'created_date'
+      ? 'created_at'
+      : rawColumn === 'updated_date'
+        ? 'updated_at'
+        : rawColumn;
     query = query.order(column, { ascending });
   });
   return query;
@@ -77,7 +116,7 @@ const createEntityClient = (entityName) => {
       query = applyOrder(query, orderBy);
       const { data, error } = await query;
       if (error) throw error;
-      return data || [];
+      return normalizeRows(data || []);
     },
     filter: async (filters = {}, orderBy) => {
       let query = supabase.from(tableName).select('*');
@@ -85,27 +124,29 @@ const createEntityClient = (entityName) => {
       query = applyOrder(query, orderBy);
       const { data, error } = await query;
       if (error) throw error;
-      return data || [];
+      return normalizeRows(data || []);
     },
     create: async (payload) => {
-      const { data, error } = await supabase.from(tableName).insert([payload]);
+      const ownedPayload = await addOwnership(entityName, payload);
+      const { data, error } = await supabase.from(tableName).insert([ownedPayload]).select();
       if (error) throw error;
-      return data?.[0] || null;
+      return normalizeRow(data?.[0] || null);
     },
     bulkCreate: async (items) => {
-      const { data, error } = await supabase.from(tableName).insert(items);
+      const ownedItems = await Promise.all((items || []).map(item => addOwnership(entityName, item)));
+      const { data, error } = await supabase.from(tableName).insert(ownedItems).select();
       if (error) throw error;
-      return data || [];
+      return normalizeRows(data || []);
     },
     update: async (id, payload) => {
-      const { data, error } = await supabase.from(tableName).update(payload).eq('id', id);
+      const { data, error } = await supabase.from(tableName).update(payload).eq('id', id).select();
       if (error) throw error;
-      return data?.[0] || null;
+      return normalizeRow(data?.[0] || null);
     },
     delete: async (id) => {
-      const { data, error } = await supabase.from(tableName).delete().eq('id', id);
+      const { data, error } = await supabase.from(tableName).delete().eq('id', id).select();
       if (error) throw error;
-      return data || [];
+      return normalizeRows(data || []);
     }
   };
 };
@@ -125,6 +166,7 @@ const auth = {
     return {
       id: data.user.id,
       email: data.user.email,
+      email_confirmed_at: data.user.email_confirmed_at,
       role: data.user.user_metadata?.role || null,
       ...data.user.user_metadata
     };
@@ -191,10 +233,7 @@ const auth = {
 const functions = {
   invoke: async (name, payload) => {
     const { data, error } = await supabase.functions.invoke(name, {
-      body: payload ? JSON.stringify(payload) : undefined,
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      body: payload || undefined
     });
 
     if (error) {

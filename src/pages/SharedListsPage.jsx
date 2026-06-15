@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { Plus, Users, Link as LinkIcon, Trash2, Gift } from 'lucide-react';
+import { Plus, Link as LinkIcon, Trash2, Gift } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import NativePicker from '@/components/NativePicker';
+import { useAuth } from '@/lib/AuthContext';
 
 function generateToken() {
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
@@ -12,6 +13,7 @@ function generateToken() {
 
 export default function SharedListsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     title: '',
@@ -22,8 +24,9 @@ export default function SharedListsPage() {
   });
 
   const { data: lists = [], isLoading } = useQuery({
-    queryKey: ['sharedLists'],
-    queryFn: () => base44.entities.SharedList.list('-created_date'),
+    queryKey: ['sharedLists', user?.email],
+    queryFn: () => base44.entities.SharedList.filter({ created_by: user?.email }, '-created_date'),
+    enabled: !!user?.email,
   });
 
   const createMutation = useMutation({

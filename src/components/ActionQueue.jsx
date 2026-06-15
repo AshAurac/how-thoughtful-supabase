@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { daysUntil, formatEventDate } from '@/lib/dateUtils';
-import { parseISO } from 'date-fns';
 
 // Priority weights: higher = more urgent to act on
 const PRIORITY_WEIGHT = { high: 3, medium: 2, low: 1, free: 0 };

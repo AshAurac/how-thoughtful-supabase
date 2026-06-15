@@ -147,8 +147,9 @@ export default function YearInGiving({ user }) {
   const firstName = user?.full_name?.split(' ')[0] || 'you';
 
   const { data: giftHistory = [] } = useQuery({
-    queryKey: ['giftHistory'],
-    queryFn: () => base44.entities.GiftHistory.list('-created_date'),
+    queryKey: ['giftHistory', user?.email],
+    queryFn: () => base44.entities.GiftHistory.filter({ created_by: user?.email }, '-created_date'),
+    enabled: !!user?.email,
   });
 
   // Group history by recipient

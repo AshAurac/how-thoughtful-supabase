@@ -27,10 +27,14 @@ serve(async (req) => {
       const product = session.metadata?.product;
       const userEmail = session.metadata?.user_email;
       if (product && userEmail) {
-        const { data: profiles } = await supabaseAdmin.from('user_profiles').select('*');
-        const profile = profiles.find((p: any) => p.created_by === userEmail || p.email === userEmail);
+        const { data: profiles = [] } = await supabaseAdmin.from('user_profiles').select('*').or(`created_by.eq.${userEmail},email.eq.${userEmail}`);
+        const profile = profiles[0];
         if (profile) {
-          await supabaseAdmin.from('user_profiles').update({ is_premium: true, premium_type: product, premium_since: new Date().toISOString() }).eq('id', profile.id);
+          await supabaseAdmin.from('user_profiles').update({
+            is_premium: true,
+            premium_type: product,
+            premium_since: new Date().toISOString()
+          }).eq('id', profile.id);
         }
       }
     }
@@ -38,10 +42,10 @@ serve(async (req) => {
       const subscription = event.data.object as any;
       const email = subscription.metadata?.user_email;
       if (email) {
-        const { data: profiles } = await supabaseAdmin.from('user_profiles').select('*');
-        const profile = profiles.find((p: any) => p.created_by === email || p.email === email);
-        if (profile && profile.premium_type === 'annual') {
-          await supabaseAdmin.from('user_profiles').update({ is_premium: false }).eq('id', profile.id);
+        const { data: profiles = [] } = await supabaseAdmin.from('user_profiles').select('*').or(`created_by.eq.${email},email.eq.${email}`);
+        const profile = profiles[0];
+        if (profile) {
+          await supabaseAdmin.from('user_profiles').update({ is_premium: false, premium_type: null }).eq('id', profile.id);
         }
       }
     }
