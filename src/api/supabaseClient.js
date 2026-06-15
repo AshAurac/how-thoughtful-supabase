@@ -3,6 +3,7 @@ import { appParams } from '@/lib/app-params';
 
 const SUPABASE_URL = appParams.supabaseUrl;
 const SUPABASE_ANON_KEY = appParams.supabaseAnonKey;
+const APP_URL = appParams.appUrl?.replace(/\/$/, '');
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error('Missing Supabase environment variables. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
@@ -43,6 +44,23 @@ const normalizeRows = (data) => Array.isArray(data) ? data.map(normalizeRow) : d
 const getCurrentUser = async () => {
   const { data } = await supabase.auth.getUser();
   return data?.user || null;
+};
+
+const getRedirectOrigin = () => {
+  if (!APP_URL) return window.location.origin;
+
+  const currentHost = window.location.hostname;
+  if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+    return window.location.origin;
+  }
+
+  return APP_URL;
+};
+
+const toCanonicalUrl = (url = '/') => {
+  const origin = getRedirectOrigin();
+  const parsed = new URL(url, window.location.origin);
+  return `${origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
 };
 
 const addOwnership = async (entityName, payload) => {
@@ -184,7 +202,7 @@ const auth = {
       email,
       password,
       options: {
-        emailRedirectTo: window.location.origin
+        emailRedirectTo: getRedirectOrigin()
       }
     });
     if (error) throw error;
@@ -195,16 +213,14 @@ const auth = {
       type: 'signup',
       email,
       options: {
-        emailRedirectTo: window.location.origin
+        emailRedirectTo: getRedirectOrigin()
       }
     });
     if (error) throw error;
     return data;
   },
   loginWithProvider: async (provider, fromUrl) => {
-    const redirectTo = fromUrl && /^https?:\/\//i.test(fromUrl)
-      ? fromUrl
-      : `${window.location.origin}${fromUrl || '/'}`;
+    const redirectTo = toCanonicalUrl(fromUrl || '/');
 
     return supabase.auth.signInWithOAuth({
       provider,
@@ -226,7 +242,8 @@ const auth = {
     return !!data?.session?.user;
   },
   redirectToLogin: (url) => {
-    window.location.href = `/login?from_url=${encodeURIComponent(url || window.location.href)}`;
+    const loginUrl = `${getRedirectOrigin()}/login?from_url=${encodeURIComponent(toCanonicalUrl(url || window.location.href))}`;
+    window.location.href = loginUrl;
   }
 };
 

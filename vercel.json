@@ -1,4 +1,17 @@
 {
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "how-thoughtful-supabase-chris-collins-projects.vercel.app"
+        }
+      ],
+      "destination": "https://howthoughtful.app/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

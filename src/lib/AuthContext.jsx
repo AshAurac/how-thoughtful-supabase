@@ -16,12 +16,27 @@ export const AuthProvider = ({ children }) => {
     checkUserAuth();
   }, []);
 
+  const cleanAuthHash = () => {
+    if (typeof window === 'undefined' || !window.location.hash) return;
+
+    const hash = window.location.hash.slice(1);
+    const isSupabaseAuthHash = !hash || hash.includes('access_token=') || hash.includes('refresh_token=') || hash.includes('error=');
+    if (!isSupabaseAuthHash) return;
+
+    window.history.replaceState(
+      window.history.state,
+      document.title,
+      `${window.location.pathname}${window.location.search}`
+    );
+  };
+
   const checkUserAuth = async () => {
     setIsLoadingAuth(true);
     setAuthError(null);
 
     try {
       const currentUser = await base44.auth.me();
+      cleanAuthHash();
       setUser(currentUser);
       setIsAuthenticated(true);
     } catch (error) {
