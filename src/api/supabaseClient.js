@@ -185,6 +185,8 @@ const auth = {
       id: data.user.id,
       email: data.user.email,
       email_confirmed_at: data.user.email_confirmed_at,
+      confirmed_at: data.user.confirmed_at,
+      email_verified: data.user.user_metadata?.email_verified,
       role: data.user.user_metadata?.role || null,
       ...data.user.user_metadata
     };

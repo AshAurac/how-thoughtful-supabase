@@ -8,6 +8,7 @@ import { getUpcomingEvents, daysUntil, urgencyColor, formatEventDate } from '@/l
 import PriorityBadge from '@/components/PriorityBadge';
 import ProfileNudge from '@/components/ProfileNudge';
 import ActionQueue from '@/components/ActionQueue';
+import { isEmailVerified } from '@/lib/authStatus';
 
 function getNextActionLabel(days) {
   if (days <= 0) return { label: 'Today!', urgent: true };
@@ -129,6 +130,7 @@ export default function Dashboard({ user }) {
   const queryClient = useQueryClient();
   const [showNudge, setShowNudge] = useState(false);
   const [activeTab, setActiveTab] = useState('priority');
+  const emailVerified = isEmailVerified(user);
 
   const { onTouchStart, onTouchMove, onTouchEnd, indicatorRef } = usePullToRefresh(async () => {
     await queryClient.invalidateQueries();
@@ -244,7 +246,7 @@ export default function Dashboard({ user }) {
         {activeTab === 'priority' && (
           <>
             {/* Email verification nudge */}
-            {!localStorage.getItem('email_verified') && (
+            {!emailVerified && (
               <div className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3 mb-3">
                 <div className="w-8 h-8 rounded-full bg-terracotta/10 flex items-center justify-center flex-shrink-0">
                   <Mail className="w-4 h-4 text-terracotta" />
@@ -255,7 +257,6 @@ export default function Dashboard({ user }) {
                 </div>
                 <Link
                   to="/profile"
-                  onClick={() => localStorage.setItem('email_verified', '1')}
                   className="shrink-0 text-xs font-heading font-semibold text-terracotta border border-terracotta/40 px-3 py-1.5 rounded-full hover:bg-terracotta hover:text-white transition-all"
                 >
                   Go →

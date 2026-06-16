@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { LogOut, Trash2, AlertTriangle, Sun, Moon, Sparkles, Mail, CheckCircle2, Plus, X, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { LogOut, Trash2, AlertTriangle, Sun, Moon, Sparkles, Mail, CheckCircle2, Plus, X, ShieldAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { LOVE_LANGUAGES } from '@/lib/catalogs';
 import NativePicker from '@/components/NativePicker';
 import { useFeatureFlags, FEATURES } from '@/hooks/useFeatureFlags';
 import FeedbackCard from '@/components/FeedbackCard';
+import { isEmailVerified } from '@/lib/authStatus';
 
 function useDarkMode() {
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
@@ -33,11 +34,11 @@ export default function ProfilePage({ user }) {
   const [profileId, setProfileId] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDark, toggleDark] = useDarkMode();
-  const [verifyState, setVerifyState] = useState('idle'); // idle | sending | sent
   const [verificationBusy, setVerificationBusy] = useState(false);
   const [customSkill, setCustomSkill] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const { isUnlocked, toggle: toggleFeature } = useFeatureFlags(user);
+  const emailVerified = isEmailVerified(user);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['userProfile'],
@@ -104,6 +105,42 @@ export default function ProfilePage({ user }) {
         <h1 className="font-heading font-bold text-2xl text-foreground">Your Profile</h1>
         <p className="text-sm text-muted-foreground mt-1">This helps generate more personal gift ideas for your style.</p>
       </div>
+
+      {!emailVerified && (
+        <div className="bg-card border border-amber-200 rounded-2xl px-5 py-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Mail className="w-4 h-4 text-amber-700 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-body text-foreground">{user?.email}</p>
+                <p className="text-xs text-muted-foreground">Verify your email to unlock checkout and premium features.</p>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-3 py-1 text-xs font-semibold">
+              <ShieldAlert className="w-3.5 h-3.5" /> Unverified
+            </span>
+          </div>
+
+          <button
+            type="button"
+            disabled={verificationBusy}
+            onClick={async () => {
+              try {
+                setVerificationBusy(true);
+                await base44.auth.resendVerificationEmail(user.email);
+                toast.success('Verification email sent — check your inbox.');
+              } catch (error) {
+                toast.error(error?.message || 'Could not send verification email.');
+              } finally {
+                setVerificationBusy(false);
+              }
+            }}
+            className="w-full rounded-full border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-100 transition-all disabled:opacity-60"
+          >
+            {verificationBusy ? 'Sending…' : 'Resend verification email'}
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Skills */}
@@ -286,56 +323,6 @@ export default function ProfilePage({ user }) {
           )}
         </div>
       )}
-
-      {/* Email verification */}
-      <div className="bg-card border border-border rounded-2xl px-5 py-4 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-            <div>
-              <p className="text-sm font-body text-foreground">{user?.email}</p>
-              <p className="text-xs text-muted-foreground">Verification status for your account</p>
-            </div>
-          </div>
-          {user?.email_confirmed_at ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5" /> Verified
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-3 py-1 text-xs font-semibold">
-              <ShieldAlert className="w-3.5 h-3.5" /> Unverified
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/40 px-3 py-3">
-          <p className="text-xs text-muted-foreground">
-            {user?.email_confirmed_at
-              ? 'Your email is verified and you can continue with purchases and premium features.'
-              : 'You can still use the app, but checkout and premium features require email verification.'}
-          </p>
-          {!user?.email_confirmed_at && (
-            <button
-              type="button"
-              disabled={verificationBusy}
-              onClick={async () => {
-                try {
-                  setVerificationBusy(true);
-                  await base44.auth.resendVerificationEmail(user.email);
-                  toast.success('Verification email sent — check your inbox.');
-                } catch (error) {
-                  toast.error(error?.message || 'Could not send verification email.');
-                } finally {
-                  setVerificationBusy(false);
-                }
-              }}
-              className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-all disabled:opacity-60"
-            >
-              {verificationBusy ? 'Sending…' : 'Resend Verification Email'}
-            </button>
-          )}
-        </div>
-      </div>
 
       {/* Features panel */}
       <div className="bg-card border border-border rounded-2xl px-5 py-4 space-y-4">
