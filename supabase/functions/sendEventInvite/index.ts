@@ -3,8 +3,10 @@ import { createClient } from 'npm:@supabase/supabase-js';
 
 const SUPABASE_URL = Deno.env.get('VITE_SUPABASE_URL') || Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-const SENDGRID_API_KEY = Deno.env.get('SENDGRID_API_KEY');
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const APP_URL = Deno.env.get('VITE_APP_URL') || Deno.env.get('APP_URL') || 'https://your-app-url.com';
+const EMAIL_FROM = Deno.env.get('EMAIL_FROM') || 'How Thoughtful <hello@send.howthoughtful.app>';
+const REPLY_TO_EMAIL = Deno.env.get('REPLY_TO_EMAIL') || 'hello@howthoughtful.app';
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error('Missing Supabase env vars');
@@ -13,24 +15,25 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 const supabaseAdmin = createClient(SUPABASE_URL || '', SUPABASE_SERVICE_KEY || '');
 
 async function sendEmail(to: string, subject: string, body: string) {
-  if (!SENDGRID_API_KEY) {
-    console.warn('SENDGRID_API_KEY not set — skipping actual email send');
-    return { ok: false, message: 'SendGrid not configured' };
+  if (!RESEND_API_KEY) {
+    throw new Error('RESEND_API_KEY is not configured');
   }
-  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+  const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${SENDGRID_API_KEY}`,
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      personalizations: [{ to: [{ email: to }] }],
-      from: { email: 'hello@howthoughtful.app', name: 'How Thoughtful' },
+      from: EMAIL_FROM,
+      to: [to],
+      reply_to: REPLY_TO_EMAIL,
       subject,
-      content: [{ type: 'text/plain', value: body }]
+      text: body
     })
   });
-  return res.ok ? { ok: true } : { ok: false, status: res.status };
+  if (!res.ok) throw new Error(`Resend failed with ${res.status}: ${await res.text()}`);
+  return res.json();
 }
 
 serve(async (req) => {

@@ -7,7 +7,10 @@ Required environment variables (for Edge Functions / server-side):
 - `VITE_APP_URL` — public URL of the deployed app (used in invite links)
 
 Optional / provider keys:
-- `SENDGRID_API_KEY` — for sending emails (SendGrid used in templates). You can swap for Mailgun or SMTP.
+- `RESEND_API_KEY` — for reminder, invite, and Secret Santa emails.
+- `EMAIL_FROM` — recommended: `How Thoughtful <hello@send.howthoughtful.app>`.
+- `REPLY_TO_EMAIL` — recommended: `hello@howthoughtful.app`.
+- `REMINDER_CRON_SECRET` — any long random password used by the daily reminder cron job.
 - `OPENAI_API_KEY` — for AI generation (InvokeLLM). Alternatives: Anthropic, local LLM.
 - `STRIPE_SECRET_KEY` — for checkout sessions
 - `STRIPE_WEBHOOK_SECRET` — to validate Stripe webhooks
@@ -15,9 +18,10 @@ Optional / provider keys:
 
 Quick setup
 1. Run the SQL in `db/supabase_schema.sql` in the Supabase SQL editor to create tables.
-2. Deploy Edge Functions in `supabase/functions/*` (templates included). Edit them to match your provider (SendGrid keys, price IDs, etc.).
+2. Deploy Edge Functions in `supabase/functions/*`.
 3. Set the environment variables in Supabase (Project Settings → Environment Variables) and for local dev use `.env.local`.
 4. If using Stripe, create a webhook pointing to the deployed `stripeWebhook` endpoint and set `STRIPE_WEBHOOK_SECRET`.
+5. For reminders, deploy `sendEventReminders`, set the Resend secrets above, then run `db/reminder_cron_setup.sql` in the Supabase SQL editor after replacing the placeholders.
 
 Notes on low-cost hosting
 - Supabase free tier supports hosting Postgres and Edge Functions with modest usage. Use SendGrid free tier and OpenAI pay-as-you-go carefully to minimize cost.
