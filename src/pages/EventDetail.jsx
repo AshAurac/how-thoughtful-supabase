@@ -499,10 +499,10 @@ export default function EventDetail() {
       {!editingEvent && (
         <button
           onClick={() => setConfirmDelete(true)}
-          className="w-full flex items-center justify-center gap-2 border border-destructive/40 text-destructive py-3 rounded-2xl font-heading font-semibold text-sm hover:bg-destructive/5 transition-all"
+          className="w-full min-h-[44px] flex items-center justify-center gap-2 border border-destructive/40 text-destructive py-3 rounded-2xl font-heading font-semibold text-sm hover:bg-destructive/5 transition-all"
         >
           <Trash2 className="w-4 h-4" />
-          Delete this occasion
+          Delete occasion
         </button>
       )}
 
