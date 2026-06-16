@@ -13,7 +13,16 @@ export default function RecipientsPage({ user }) {
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [form, setForm] = useState({ name: '', age: '', relationship: '', love_language: '', interests: '', notes: '' });
+  const [form, setForm] = useState({
+    name: '',
+    age: '',
+    birthday_month: '',
+    birthday_day: '',
+    relationship: '',
+    love_language: '',
+    interests: '',
+    notes: ''
+  });
 
   const { data: recipients = [], isLoading } = useQuery({
     queryKey: ['recipients', user?.email],
@@ -29,12 +38,14 @@ export default function RecipientsPage({ user }) {
     mutationFn: (data) => base44.entities.Recipient.create({
       ...data,
       age: data.age ? parseInt(data.age) : undefined,
+      birthday_month: data.birthday_month ? parseInt(data.birthday_month) : undefined,
+      birthday_day: data.birthday_day ? parseInt(data.birthday_day) : undefined,
       interests: data.interests ? data.interests.split(',').map(s => s.trim()).filter(Boolean) : [],
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipients'] });
       setShowAdd(false);
-      setForm({ name: '', age: '', relationship: '', love_language: '', interests: '', notes: '' });
+      setForm({ name: '', age: '', birthday_month: '', birthday_day: '', relationship: '', love_language: '', interests: '', notes: '' });
       toast.success('Person added');
     },
   });
@@ -99,6 +110,26 @@ export default function RecipientsPage({ user }) {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <input
+              type="number"
+              min="1"
+              max="12"
+              value={form.birthday_month}
+              onChange={e => setForm(f => ({ ...f, birthday_month: e.target.value }))}
+              placeholder="Birthday month"
+              className="border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
+            />
+            <input
+              type="number"
+              min="1"
+              max="31"
+              value={form.birthday_day}
+              onChange={e => setForm(f => ({ ...f, birthday_day: e.target.value }))}
+              placeholder="Birthday day"
+              className="border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
               value={form.relationship}
               onChange={e => setForm(f => ({ ...f, relationship: e.target.value }))}
               placeholder="Relationship"
@@ -117,6 +148,13 @@ export default function RecipientsPage({ user }) {
             onChange={e => setForm(f => ({ ...f, interests: e.target.value }))}
             placeholder="Interests (comma-separated)"
             className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
+          />
+          <textarea
+            value={form.notes}
+            onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+            placeholder="Notes"
+            rows={3}
+            className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
           />
           <button type="submit" className="w-full bg-terracotta text-white py-2.5 rounded-full text-sm font-heading font-semibold hover:bg-terracotta-dark transition-all">
             Add person
@@ -159,6 +197,11 @@ export default function RecipientsPage({ user }) {
               <div className="flex-1">
                 <p className="font-heading font-semibold text-foreground">{r.name}</p>
                 {r.relationship && <p className="text-sm text-muted-foreground capitalize">{r.relationship}</p>}
+                {r.birthday_month && r.birthday_day && (
+                  <p className="text-xs text-muted-foreground">
+                    Birthday {String(r.birthday_day).padStart(2, '0')}/{String(r.birthday_month).padStart(2, '0')}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {r.age && (

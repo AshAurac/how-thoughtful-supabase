@@ -21,6 +21,36 @@ function ageLabel(occasion) {
   return 'Age / Years (optional)';
 }
 
+function recipientUpdatesFromEvent(data) {
+  const updates = {};
+
+  if (data.occasion === 'birthday' && data.event_date) {
+    const [, month, day] = data.event_date.split('-').map(Number);
+    if (month && day) {
+      updates.birthday_month = month;
+      updates.birthday_day = day;
+    }
+    if (data.age_or_years) updates.age = data.age_or_years;
+  }
+
+  if (data.love_language) updates.love_language = data.love_language;
+  if (data.notes) updates.notes = data.notes;
+
+  return updates;
+}
+
+function mergeRecipientUpdates(existing, updates) {
+  return Object.entries(updates).reduce((acc, [key, value]) => {
+    if (value === undefined || value === null || value === '') return acc;
+    if (key === 'notes' && existing?.notes && existing.notes !== value) {
+      acc.notes = `${existing.notes}\n\n${value}`;
+      return acc;
+    }
+    if (!existing?.[key]) acc[key] = value;
+    return acc;
+  }, {});
+}
+
 export default function CreateEvent() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -43,23 +73,45 @@ export default function CreateEvent() {
   const mutation = useMutation({
     mutationFn: async (data) => {
       const buyDates = data.event_date ? computeBuyDates(data.event_date) : {};
+      let recipientId = selectedRecipientId;
       const event = await base44.entities.Event.create({
         ...data,
-        recipient_id: selectedRecipientId,
+        recipient_id: recipientId,
         ...buyDates,
         reminders_sent: []
       });
 
-      // Auto-create recipient if not already linked
+      // Keep the person profile useful when an occasion reveals birthday/context details.
+      const profileUpdates = recipientUpdatesFromEvent(data);
       if (!selectedRecipientId && data.recipient_name) {
         const existing = recipients.find(r => r.name.toLowerCase() === data.recipient_name.toLowerCase());
         if (!existing) {
-          await base44.entities.Recipient.create({ name: data.recipient_name });
-          queryClient.invalidateQueries({ queryKey: ['recipients'] });
+          const recipient = await base44.entities.Recipient.create({
+            name: data.recipient_name,
+            ...profileUpdates
+          });
+          recipientId = recipient?.id;
+        } else {
+          recipientId = existing.id;
+          const mergedUpdates = mergeRecipientUpdates(existing, profileUpdates);
+          if (Object.keys(mergedUpdates).length) {
+            await base44.entities.Recipient.update(existing.id, mergedUpdates);
+          }
+        }
+      } else if (selectedRecipientId) {
+        const existing = recipients.find(r => r.id === selectedRecipientId);
+        const mergedUpdates = mergeRecipientUpdates(existing, profileUpdates);
+        if (Object.keys(mergedUpdates).length) {
+          await base44.entities.Recipient.update(selectedRecipientId, mergedUpdates);
         }
       }
 
-      return event;
+      if (recipientId && event?.recipient_id !== recipientId) {
+        await base44.entities.Event.update(event.id, { recipient_id: recipientId });
+      }
+      queryClient.invalidateQueries({ queryKey: ['recipients'] });
+
+      return { ...event, recipient_id: recipientId || event?.recipient_id };
     },
     onSuccess: (event) => {
       queryClient.invalidateQueries({ queryKey: ['events'] });

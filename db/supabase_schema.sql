@@ -44,6 +44,8 @@ create table if not exists recipients (
   name text not null,
   relationship text,
   age int,
+  birthday_month int,
+  birthday_day int,
   interests text[],
   notes text,
   love_language text,
