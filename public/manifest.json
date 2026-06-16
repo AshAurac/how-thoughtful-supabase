@@ -6,5 +6,18 @@
   "background_color": "#F4EFE3",
   "theme_color": "#F4EFE3",
   "description": "Never panic-buy a gift again",
-  "icons": []
+  "icons": [
+    {
+      "src": "https://media.base44.com/images/public/6a1188b0e669a81e5b3530ea/5247e49c3_RealLogo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://media.base44.com/images/public/6a1188b0e669a81e5b3530ea/5247e49c3_RealLogo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
