@@ -9,6 +9,7 @@ import NativePicker from '@/components/NativePicker';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import BulkImportRecipients from '@/components/BulkImportRecipients';
 import { findRecipientMatch, mergeRecipientPayload, recipientPayloadFromForm } from '@/lib/recipientMatching';
+import { syncBirthdayEventForRecipient } from '@/lib/birthdayOccasions';
 
 export default function RecipientsPage({ user }) {
   const queryClient = useQueryClient();
@@ -37,6 +38,12 @@ export default function RecipientsPage({ user }) {
     enabled: !!user?.email,
   });
 
+  const { data: events = [] } = useQuery({
+    queryKey: ['events', user?.email],
+    queryFn: () => base44.entities.Event.filter({ created_by: user?.email }, 'event_date'),
+    enabled: !!user?.email,
+  });
+
   const { onTouchStart, onTouchMove, onTouchEnd, indicatorRef } = usePullToRefresh(async () => {
     await queryClient.invalidateQueries({ queryKey: ['recipients'] });
   });
@@ -47,20 +54,37 @@ export default function RecipientsPage({ user }) {
   };
 
   const addMutation = useMutation({
-    mutationFn: ({ data, mode = 'create', match }) => {
+    mutationFn: async ({ data, mode = 'create', match }) => {
       const payload = recipientPayloadFromForm(data);
+      let recipient;
       if (mode === 'merge' && match?.recipient) {
         const merged = mergeRecipientPayload(match.recipient, payload);
-        if (!Object.keys(merged).length) return Promise.resolve(match.recipient);
-        return base44.entities.Recipient.update(match.recipient.id, merged);
+        recipient = Object.keys(merged).length
+          ? await base44.entities.Recipient.update(match.recipient.id, merged)
+          : match.recipient;
+      } else {
+        recipient = await base44.entities.Recipient.create(payload);
       }
-      return base44.entities.Recipient.create(payload);
+      const birthdaySync = await syncBirthdayEventForRecipient({
+        recipient,
+        events,
+        eventEntity: base44.entities.Event,
+      });
+      return { recipient, birthdaySync };
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['recipients'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
       setShowAdd(false);
       resetForm();
-      toast.success(variables?.mode === 'merge' ? 'Person updated' : 'Person added');
+      const personAction = variables?.mode === 'merge' ? 'Person updated' : 'Person added';
+      if (result?.birthdaySync?.action === 'created') {
+        toast.success(`${personAction} and birthday occasion created`);
+      } else if (result?.birthdaySync?.action === 'updated') {
+        toast.success(`${personAction} and birthday occasion synced`);
+      } else {
+        toast.success(personAction);
+      }
     },
   });
 

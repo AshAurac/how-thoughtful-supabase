@@ -7,6 +7,7 @@ import { ArrowLeft, Check, Gift, Pencil, X } from 'lucide-react';
 import { formatEventDate } from '@/lib/dateUtils';
 import { LOVE_LANGUAGES } from '@/lib/catalogs';
 import NativePicker from '@/components/NativePicker';
+import { syncBirthdayEventForRecipient } from '@/lib/birthdayOccasions';
 
 const emptyForm = {
   name: '',
@@ -71,21 +72,36 @@ export default function RecipientDetail() {
   const birthday = recipient ? formatBirthday(recipient.birthday_month, recipient.birthday_day) : null;
 
   const updateMutation = useMutation({
-    mutationFn: () => base44.entities.Recipient.update(id, {
-      name: form.name.trim(),
-      age: form.age ? parseInt(form.age) : null,
-      birthday_month: form.birthday_month ? parseInt(form.birthday_month) : null,
-      birthday_day: form.birthday_day ? parseInt(form.birthday_day) : null,
-      relationship: form.relationship.trim(),
-      love_language: form.love_language,
-      interests: form.interests ? form.interests.split(',').map(s => s.trim()).filter(Boolean) : [],
-      notes: form.notes.trim()
-    }),
-    onSuccess: () => {
+    mutationFn: async () => {
+      const updatedRecipient = await base44.entities.Recipient.update(id, {
+        name: form.name.trim(),
+        age: form.age ? parseInt(form.age) : null,
+        birthday_month: form.birthday_month ? parseInt(form.birthday_month) : null,
+        birthday_day: form.birthday_day ? parseInt(form.birthday_day) : null,
+        relationship: form.relationship.trim(),
+        love_language: form.love_language,
+        interests: form.interests ? form.interests.split(',').map(s => s.trim()).filter(Boolean) : [],
+        notes: form.notes.trim()
+      });
+      const birthdaySync = await syncBirthdayEventForRecipient({
+        recipient: updatedRecipient,
+        events,
+        eventEntity: base44.entities.Event,
+      });
+      return { recipient: updatedRecipient, birthdaySync };
+    },
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['recipient', id] });
       queryClient.invalidateQueries({ queryKey: ['recipients'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
       setEditing(false);
-      toast.success('Person updated');
+      if (result?.birthdaySync?.action === 'created') {
+        toast.success('Person updated and birthday occasion created');
+      } else if (result?.birthdaySync?.action === 'updated') {
+        toast.success('Person updated and birthday occasion synced');
+      } else {
+        toast.success('Person updated');
+      }
     },
   });
 

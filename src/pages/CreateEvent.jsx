@@ -8,6 +8,7 @@ import { computeBuyDates } from '@/lib/dateUtils';
 import { LOVE_LANGUAGES } from '@/lib/catalogs';
 import NativePicker from '@/components/NativePicker';
 import { findRecipientMatch } from '@/lib/recipientMatching';
+import { nextBirthdayDate } from '@/lib/birthdayOccasions';
 
 const OCCASIONS = ['birthday','anniversary','holiday','graduation','baby_shower','wedding','housewarming','thank_you','just_because','other'];
 const PRIORITIES = ['free','low','medium','high'];
@@ -52,6 +53,21 @@ function mergeRecipientUpdates(existing, updates) {
   }, {});
 }
 
+function eventFormDefaultsFromRecipient(recipient, occasion, form) {
+  if (!recipient) return {};
+
+  const defaults = {};
+  if (occasion === 'birthday') {
+    const birthdayDate = nextBirthdayDate(recipient.birthday_month, recipient.birthday_day);
+    if (birthdayDate && !form.event_date) defaults.event_date = birthdayDate;
+    if (recipient.age && !form.age_or_years) defaults.age_or_years = String(recipient.age);
+  }
+  if (recipient.love_language && !form.love_language) defaults.love_language = recipient.love_language;
+  if (recipient.notes && !form.notes) defaults.notes = recipient.notes;
+
+  return defaults;
+}
+
 export default function CreateEvent() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -70,6 +86,29 @@ export default function CreateEvent() {
     queryKey: ['recipients'],
     queryFn: () => base44.entities.Recipient.list(),
   });
+
+  const applyRecipientSelection = (recipient) => {
+    setSelectedRecipientId(recipient.id);
+    setShowRecipientPicker(false);
+    setForm(f => ({
+      ...f,
+      recipient_name: recipient.name,
+      ...eventFormDefaultsFromRecipient(recipient, f.occasion, f),
+    }));
+  };
+
+  const handleOccasionChange = (occasion) => {
+    setForm(f => {
+      const recipient = selectedRecipientId
+        ? recipients.find(r => r.id === selectedRecipientId)
+        : null;
+      return {
+        ...f,
+        occasion,
+        ...eventFormDefaultsFromRecipient(recipient, occasion, f),
+      };
+    });
+  };
 
   const mutation = useMutation({
     mutationFn: async (data) => {
@@ -178,11 +217,7 @@ export default function CreateEvent() {
                   <button
                     key={r.id}
                     type="button"
-                    onClick={() => {
-                      set('recipient_name', r.name);
-                      setSelectedRecipientId(r.id);
-                      setShowRecipientPicker(false);
-                    }}
+                    onClick={() => applyRecipientSelection(r)}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted transition-all text-left"
                   >
                     <span className="font-body text-sm text-foreground">{r.name}</span>
@@ -210,7 +245,7 @@ export default function CreateEvent() {
             <NativePicker
               label="Occasion"
               value={form.occasion}
-              onChange={v => set('occasion', v)}
+              onChange={handleOccasionChange}
               options={OCCASIONS.map(o => ({ value: o, label: o.replace(/_/g, ' ') }))}
             />
           </div>
