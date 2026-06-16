@@ -14,6 +14,12 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 
 const supabaseAdmin = createClient(SUPABASE_URL || '', SUPABASE_SERVICE_KEY || '');
 
+async function readJsonBody(req: Request) {
+  const raw = await req.text();
+  if (!raw.trim()) return {};
+  return JSON.parse(raw);
+}
+
 async function sendEmail(to: string, subject: string, body: string) {
   if (!RESEND_API_KEY) {
     throw new Error('RESEND_API_KEY is not configured');
@@ -38,7 +44,7 @@ async function sendEmail(to: string, subject: string, body: string) {
 
 serve(async (req) => {
   try {
-    const { event_id, invite_email } = await req.json();
+    const { event_id, invite_email } = await readJsonBody(req);
     if (!event_id || !invite_email) return new Response(JSON.stringify({ error: 'Missing event_id or invite_email' }), { status: 400 });
 
     // Find the event

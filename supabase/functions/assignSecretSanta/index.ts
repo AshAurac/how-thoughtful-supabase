@@ -10,6 +10,12 @@ const REPLY_TO_EMAIL = Deno.env.get('REPLY_TO_EMAIL') || 'hello@howthoughtful.ap
 
 const supabaseAdmin = createClient(SUPABASE_URL || '', SUPABASE_SERVICE_KEY || '');
 
+async function readJsonBody(req: Request) {
+  const raw = await req.text();
+  if (!raw.trim()) return {};
+  return JSON.parse(raw);
+}
+
 async function sendEmail(to: string, subject: string, body: string) {
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY is not configured');
   const res = await fetch('https://api.resend.com/emails', {
@@ -29,7 +35,7 @@ async function sendEmail(to: string, subject: string, body: string) {
 
 serve(async (req) => {
   try {
-    const { listId } = await req.json();
+    const { listId } = await readJsonBody(req);
     if (!listId) return new Response(JSON.stringify({ error: 'listId required' }), { status: 400 });
 
     const { data: lists } = await supabaseAdmin.from('shared_lists').select('*').eq('id', listId).limit(1);
