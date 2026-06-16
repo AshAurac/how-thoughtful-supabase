@@ -8,11 +8,13 @@ import { LOVE_LANGUAGES } from '@/lib/catalogs';
 import NativePicker from '@/components/NativePicker';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import BulkImportRecipients from '@/components/BulkImportRecipients';
+import { findRecipientMatch, mergeRecipientPayload, recipientPayloadFromForm } from '@/lib/recipientMatching';
 
 export default function RecipientsPage({ user }) {
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [duplicateMatch, setDuplicateMatch] = useState(null);
   const [form, setForm] = useState({
     name: '',
     age: '',
@@ -24,6 +26,11 @@ export default function RecipientsPage({ user }) {
     notes: ''
   });
 
+  const updateForm = (updates) => {
+    setForm(f => ({ ...f, ...updates }));
+    setDuplicateMatch(null);
+  };
+
   const { data: recipients = [], isLoading } = useQuery({
     queryKey: ['recipients', user?.email],
     queryFn: () => base44.entities.Recipient.filter({ created_by: user?.email }, 'name'),
@@ -34,21 +41,44 @@ export default function RecipientsPage({ user }) {
     await queryClient.invalidateQueries({ queryKey: ['recipients'] });
   });
 
+  const resetForm = () => {
+    setForm({ name: '', age: '', birthday_month: '', birthday_day: '', relationship: '', love_language: '', interests: '', notes: '' });
+    setDuplicateMatch(null);
+  };
+
   const addMutation = useMutation({
-    mutationFn: (data) => base44.entities.Recipient.create({
-      ...data,
-      age: data.age ? parseInt(data.age) : undefined,
-      birthday_month: data.birthday_month ? parseInt(data.birthday_month) : undefined,
-      birthday_day: data.birthday_day ? parseInt(data.birthday_day) : undefined,
-      interests: data.interests ? data.interests.split(',').map(s => s.trim()).filter(Boolean) : [],
-    }),
-    onSuccess: () => {
+    mutationFn: ({ data, mode = 'create', match }) => {
+      const payload = recipientPayloadFromForm(data);
+      if (mode === 'merge' && match?.recipient) {
+        const merged = mergeRecipientPayload(match.recipient, payload);
+        if (!Object.keys(merged).length) return Promise.resolve(match.recipient);
+        return base44.entities.Recipient.update(match.recipient.id, merged);
+      }
+      return base44.entities.Recipient.create(payload);
+    },
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['recipients'] });
       setShowAdd(false);
-      setForm({ name: '', age: '', birthday_month: '', birthday_day: '', relationship: '', love_language: '', interests: '', notes: '' });
-      toast.success('Person added');
+      resetForm();
+      toast.success(variables?.mode === 'merge' ? 'Person updated' : 'Person added');
     },
   });
+
+  const handleAddSubmit = (e) => {
+    e.preventDefault();
+    if (!duplicateMatch) {
+      const match = findRecipientMatch(form.name, recipients);
+      if (match) {
+        setDuplicateMatch(match);
+        return;
+      }
+    }
+    addMutation.mutate({ data: form, mode: 'create' });
+  };
+
+  const handleMergeDuplicate = () => {
+    addMutation.mutate({ data: form, mode: 'merge', match: duplicateMatch });
+  };
 
   return (
     <div
@@ -85,7 +115,7 @@ export default function RecipientsPage({ user }) {
 
       {showAdd && (
         <form
-          onSubmit={(e) => { e.preventDefault(); addMutation.mutate(form); }}
+          onSubmit={handleAddSubmit}
           className="bg-muted border border-border rounded-2xl p-4 space-y-3"
         >
           <div className="flex items-center justify-between mb-1">
@@ -95,7 +125,7 @@ export default function RecipientsPage({ user }) {
           <div className="grid grid-cols-3 gap-2">
             <input
               value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              onChange={e => updateForm({ name: e.target.value })}
               placeholder="Name *"
               required
               className="col-span-2 border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
@@ -103,7 +133,7 @@ export default function RecipientsPage({ user }) {
             <input
               type="number"
               value={form.age}
-              onChange={e => setForm(f => ({ ...f, age: e.target.value }))}
+              onChange={e => updateForm({ age: e.target.value })}
               placeholder="Age"
               className="border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
             />
@@ -114,7 +144,7 @@ export default function RecipientsPage({ user }) {
               min="1"
               max="12"
               value={form.birthday_month}
-              onChange={e => setForm(f => ({ ...f, birthday_month: e.target.value }))}
+              onChange={e => updateForm({ birthday_month: e.target.value })}
               placeholder="Birthday month"
               className="border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
             />
@@ -123,7 +153,7 @@ export default function RecipientsPage({ user }) {
               min="1"
               max="31"
               value={form.birthday_day}
-              onChange={e => setForm(f => ({ ...f, birthday_day: e.target.value }))}
+              onChange={e => updateForm({ birthday_day: e.target.value })}
               placeholder="Birthday day"
               className="border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
             />
@@ -131,7 +161,7 @@ export default function RecipientsPage({ user }) {
           <div className="grid grid-cols-2 gap-2">
             <input
               value={form.relationship}
-              onChange={e => setForm(f => ({ ...f, relationship: e.target.value }))}
+              onChange={e => updateForm({ relationship: e.target.value })}
               placeholder="Relationship"
               className="border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
             />
@@ -139,25 +169,53 @@ export default function RecipientsPage({ user }) {
               label="Love language"
               placeholder="Love language"
               value={form.love_language}
-              onChange={v => setForm(f => ({ ...f, love_language: v }))}
+              onChange={v => updateForm({ love_language: v })}
               options={[{ value: '', label: 'None' }, ...LOVE_LANGUAGES.map(l => ({ value: l.value, label: l.label }))]}
             />
           </div>
           <input
             value={form.interests}
-            onChange={e => setForm(f => ({ ...f, interests: e.target.value }))}
+            onChange={e => updateForm({ interests: e.target.value })}
             placeholder="Interests (comma-separated)"
             className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
           />
           <textarea
             value={form.notes}
-            onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+            onChange={e => updateForm({ notes: e.target.value })}
             placeholder="Notes"
             rows={3}
             className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
           />
+          {duplicateMatch && (
+            <div className="bg-butter/30 border border-butter rounded-2xl p-3 space-y-2">
+              <p className="text-sm font-heading font-semibold text-foreground">
+                {duplicateMatch.type === 'exact' ? 'This person already exists.' : 'This looks similar to someone already in People.'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Existing person: <span className="font-medium text-foreground">{duplicateMatch.recipient.name}</span>
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleMergeDuplicate}
+                  disabled={addMutation.isPending}
+                  className="bg-moss text-white py-2 rounded-full text-sm font-heading font-semibold hover:bg-moss-dark transition-all disabled:opacity-60"
+                >
+                  Update existing
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addMutation.mutate({ data: form, mode: 'create' })}
+                  disabled={addMutation.isPending}
+                  className="bg-card border border-border text-foreground py-2 rounded-full text-sm font-heading font-semibold hover:bg-muted transition-all disabled:opacity-60"
+                >
+                  Create separate
+                </button>
+              </div>
+            </div>
+          )}
           <button type="submit" className="w-full bg-terracotta text-white py-2.5 rounded-full text-sm font-heading font-semibold hover:bg-terracotta-dark transition-all">
-            Add person
+            {duplicateMatch ? 'Create separate person' : 'Add person'}
           </button>
         </form>
       )}

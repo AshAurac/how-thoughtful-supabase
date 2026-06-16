@@ -7,6 +7,7 @@ import { ArrowLeft, ChevronDown, X } from 'lucide-react';
 import { computeBuyDates } from '@/lib/dateUtils';
 import { LOVE_LANGUAGES } from '@/lib/catalogs';
 import NativePicker from '@/components/NativePicker';
+import { findRecipientMatch } from '@/lib/recipientMatching';
 
 const OCCASIONS = ['birthday','anniversary','holiday','graduation','baby_shower','wedding','housewarming','thank_you','just_because','other'];
 const PRIORITIES = ['free','low','medium','high'];
@@ -84,18 +85,22 @@ export default function CreateEvent() {
       // Keep the person profile useful when an occasion reveals birthday/context details.
       const profileUpdates = recipientUpdatesFromEvent(data);
       if (!selectedRecipientId && data.recipient_name) {
-        const existing = recipients.find(r => r.name.toLowerCase() === data.recipient_name.toLowerCase());
-        if (!existing) {
+        const match = findRecipientMatch(data.recipient_name, recipients);
+        if (!match) {
           const recipient = await base44.entities.Recipient.create({
             name: data.recipient_name,
             ...profileUpdates
           });
           recipientId = recipient?.id;
         } else {
+          const existing = match.recipient;
           recipientId = existing.id;
           const mergedUpdates = mergeRecipientUpdates(existing, profileUpdates);
           if (Object.keys(mergedUpdates).length) {
             await base44.entities.Recipient.update(existing.id, mergedUpdates);
+          }
+          if (match.type === 'similar') {
+            toast(`Linked this occasion to existing person: ${existing.name}`);
           }
         }
       } else if (selectedRecipientId) {

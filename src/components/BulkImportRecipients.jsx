@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 import { Upload, X, CheckCircle2, AlertCircle, Download } from 'lucide-react';
+import { findRecipientMatch, mergeRecipientPayload, recipientPayloadFromForm } from '@/lib/recipientMatching';
 
 const EXAMPLE_CSV = `name,relationship,interests,love_language,notes
 Mum,parent,"cooking, gardening, reading",acts_of_service,Loves anything homemade
@@ -46,7 +47,13 @@ export default function BulkImportRecipients({ onClose }) {
   const [errors, setErrors] = useState({});
   const [importing, setImporting] = useState(false);
   const [done, setDone] = useState(false);
+  const [duplicateActions, setDuplicateActions] = useState({});
   const queryClient = useQueryClient();
+
+  const { data: existingRecipients = [] } = useQuery({
+    queryKey: ['recipients'],
+    queryFn: () => base44.entities.Recipient.list('name'),
+  });
 
   const process = (text) => {
     const parsed = parseCSV(text);
@@ -57,6 +64,7 @@ export default function BulkImportRecipients({ onClose }) {
     });
     setRows(parsed);
     setErrors(errs);
+    setDuplicateActions({});
   };
 
   const handleFile = (file) => {
@@ -66,23 +74,48 @@ export default function BulkImportRecipients({ onClose }) {
   };
 
   const validRows = rows.filter((_, i) => !errors[i]);
+  const duplicateMatches = rows.map((row, i) => errors[i] ? null : findRecipientMatch(row.name, existingRecipients));
+  const duplicateCount = duplicateMatches.filter(Boolean).length;
+
+  const rowPayload = (row) => recipientPayloadFromForm({
+    name: row.name,
+    age: row.age,
+    birthday_month: row.birthday_month,
+    birthday_day: row.birthday_day,
+    relationship: row.relationship || '',
+    interests: row.interests || '',
+    love_language: LOVE_LANGUAGE_VALUES.includes(row.love_language) ? row.love_language : '',
+    notes: row.notes || '',
+  });
 
   const handleImport = async () => {
     if (!validRows.length) return;
     setImporting(true);
     try {
-      await base44.entities.Recipient.bulkCreate(
-        validRows.map(row => ({
-          name: row.name,
-          relationship: row.relationship || '',
-          interests: row.interests ? row.interests.split(',').map(s => s.trim()).filter(Boolean) : [],
-          love_language: LOVE_LANGUAGE_VALUES.includes(row.love_language) ? row.love_language : '',
-          notes: row.notes || '',
-        }))
-      );
+      const rowsToCreate = [];
+      const updates = [];
+
+      rows.forEach((row, i) => {
+        if (errors[i]) return;
+        const payload = rowPayload(row);
+        const match = duplicateMatches[i];
+        const action = duplicateActions[i] || (match ? 'merge' : 'create');
+
+        if (match && action === 'merge') {
+          const merged = mergeRecipientPayload(match.recipient, payload);
+          if (Object.keys(merged).length) {
+            updates.push(base44.entities.Recipient.update(match.recipient.id, merged));
+          }
+        } else {
+          rowsToCreate.push(payload);
+        }
+      });
+
+      if (rowsToCreate.length) await base44.entities.Recipient.bulkCreate(rowsToCreate);
+      if (updates.length) await Promise.all(updates);
       queryClient.invalidateQueries({ queryKey: ['recipients'] });
       setDone(true);
-      toast.success(`${validRows.length} people imported!`);
+      toast.success(`${validRows.length} people processed`);
     } catch {
       toast.error('Import failed — please try again');
     }
@@ -158,17 +191,49 @@ export default function BulkImportRecipients({ onClose }) {
                 <p className="text-sm font-heading font-semibold text-foreground mb-2">
                   Preview: {validRows.length} valid / {rows.length - validRows.length} with errors
                 </p>
+                {duplicateCount > 0 && (
+                  <p className="text-xs text-butter-dark bg-butter/30 border border-butter rounded-xl px-3 py-2 mb-2">
+                    {duplicateCount} possible duplicate{duplicateCount !== 1 ? 's' : ''} found. By default these will update existing people.
+                  </p>
+                )}
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {rows.map((row, i) => (
-                    <div key={i} className={`flex items-start gap-2 p-3 rounded-xl text-sm ${errors[i] ? 'bg-destructive/5 border border-destructive/20' : 'bg-moss/5 border border-moss/20'}`}>
-                      {errors[i] ? <AlertCircle className="w-4 h-4 text-destructive flex-none mt-0.5" /> : <CheckCircle2 className="w-4 h-4 text-moss flex-none mt-0.5" />}
-                      <div className="min-w-0">
-                        <p className="font-medium text-foreground">{row.name || '—'} · {row.relationship || 'no relationship'}</p>
-                        {row.interests && <p className="text-xs text-muted-foreground">{row.interests}</p>}
-                        {errors[i] && <p className="text-xs text-destructive mt-0.5">{errors[i].join(', ')}</p>}
+                  {rows.map((row, i) => {
+                    const match = duplicateMatches[i];
+                    const action = duplicateActions[i] || (match ? 'merge' : 'create');
+                    return (
+                      <div key={i} className={`flex items-start gap-2 p-3 rounded-xl text-sm ${errors[i] ? 'bg-destructive/5 border border-destructive/20' : match ? 'bg-butter/20 border border-butter' : 'bg-moss/5 border border-moss/20'}`}>
+                        {errors[i] ? <AlertCircle className="w-4 h-4 text-destructive flex-none mt-0.5" /> : <CheckCircle2 className={`w-4 h-4 flex-none mt-0.5 ${match ? 'text-butter-dark' : 'text-moss'}`} />}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground">{row.name || '—'} · {row.relationship || 'no relationship'}</p>
+                          {row.interests && <p className="text-xs text-muted-foreground">{row.interests}</p>}
+                          {errors[i] && <p className="text-xs text-destructive mt-0.5">{errors[i].join(', ')}</p>}
+                          {match && !errors[i] && (
+                            <div className="mt-2 space-y-2">
+                              <p className="text-xs text-muted-foreground">
+                                Similar to <span className="font-medium text-foreground">{match.recipient.name}</span>
+                              </p>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setDuplicateActions(a => ({ ...a, [i]: 'merge' }))}
+                                  className={`rounded-full px-3 py-1.5 text-xs font-heading font-semibold transition-all ${action === 'merge' ? 'bg-moss text-white' : 'bg-card border border-border text-foreground'}`}
+                                >
+                                  Update existing
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDuplicateActions(a => ({ ...a, [i]: 'create' }))}
+                                  className={`rounded-full px-3 py-1.5 text-xs font-heading font-semibold transition-all ${action === 'create' ? 'bg-terracotta text-white' : 'bg-card border border-border text-foreground'}`}
+                                >
+                                  Create separate
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
