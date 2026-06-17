@@ -216,7 +216,7 @@ CRUCIAL: at least ONE idea MUST be free ($0) — a personal act, skill, or gift 
         }
       }
     } catch (err) {
-      toast.error('Something went wrong. Try again.');
+      toast.error(err?.message || 'Something went wrong. Try again.');
     }
     setLoading(false);
   };
