@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { ArrowLeft, Check, Gift, Pencil, X } from 'lucide-react';
+import { ArrowLeft, Check, Gift, Pencil, Trash2, X } from 'lucide-react';
 import { formatEventDate } from '@/lib/dateUtils';
 import { LOVE_LANGUAGES } from '@/lib/catalogs';
 import NativePicker from '@/components/NativePicker';
@@ -31,6 +31,7 @@ export default function RecipientDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [form, setForm] = useState(emptyForm);
 
   const { data: recipient } = useQuery({
@@ -102,6 +103,16 @@ export default function RecipientDetail() {
       } else {
         toast.success('Person updated');
       }
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => base44.entities.Recipient.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recipients'] });
+      queryClient.invalidateQueries({ queryKey: ['recipient', id] });
+      toast.success('Person deleted');
+      navigate('/recipients');
     },
   });
 
@@ -232,6 +243,15 @@ export default function RecipientDetail() {
             <Check className="w-4 h-4" />
             {updateMutation.isPending ? 'Saving...' : 'Save person'}
           </button>
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            disabled={deleteMutation.isPending}
+            className="w-full min-h-[44px] border border-destructive/40 text-destructive py-2.5 rounded-full text-sm font-heading font-semibold hover:bg-destructive/5 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete person
+          </button>
         </form>
       )}
 
@@ -317,6 +337,42 @@ export default function RecipientDetail() {
           </div>
         )}
       </div>
+
+      {/* Delete confirmation sheet */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-end" onClick={() => setConfirmDelete(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative w-full bg-card rounded-t-3xl shadow-2xl px-6 py-6 space-y-4"
+            style={{ paddingBottom: 'calc(1.5rem + var(--safe-bottom))' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-center">
+              <div className="w-10 h-1 rounded-full bg-border" />
+            </div>
+            <h3 className="font-heading font-bold text-foreground text-xl text-center">Delete {recipient.name}?</h3>
+            <p className="text-sm text-muted-foreground text-center">
+              This removes the person from People. Existing occasions and gifts stay in your app, so delete those separately if you do not want to keep them.
+            </p>
+            <button
+              type="button"
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+              className="w-full bg-destructive text-destructive-foreground py-4 rounded-full font-heading font-semibold hover:opacity-90 transition-all min-h-[44px] disabled:opacity-60"
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Yes, delete person'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(false)}
+              disabled={deleteMutation.isPending}
+              className="w-full border border-border text-foreground py-4 rounded-full font-heading font-semibold hover:bg-muted transition-all min-h-[44px] disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
