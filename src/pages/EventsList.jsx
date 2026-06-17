@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { base44 } from '@/api/base44Client';
 import { Plus, Upload, Users } from 'lucide-react';
-import { daysUntil, urgencyColor, formatEventDate } from '@/lib/dateUtils';
+import { daysUntil, urgencyColor, formatEventDate, relativeDayLabel } from '@/lib/dateUtils';
 import PriorityBadge from '@/components/PriorityBadge';
 import BulkImportEvents from '@/components/BulkImportEvents';
 
@@ -32,7 +32,7 @@ export default function EventsList({ user }) {
   const ownIds = new Set(ownEvents.map(e => e.id));
   const events = [...ownEvents, ...sharedEvents.filter(e => !ownIds.has(e.id))]
     .filter(e => !e.completed)
-    .sort((a, b) => new Date(a.event_date) - new Date(b.event_date));
+    .sort((a, b) => a.event_date.localeCompare(b.event_date));
 
   return (
     <div
@@ -116,7 +116,7 @@ export default function EventsList({ user }) {
                 </div>
                 <div className="text-right">
                   <span className={`text-sm font-medium ${urgencyColor(days)}`}>
-                    {days === null ? '' : days < 0 ? 'Past' : days === 0 ? 'Today' : `${days}d`}
+                    {relativeDayLabel(days, true)}
                   </span>
                   {event.budget > 0 && (
                     <div className="text-xs text-muted-foreground">${event.budget}</div>

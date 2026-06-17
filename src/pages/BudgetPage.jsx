@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { format, parseISO, isValid } from 'date-fns';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { daysUntil } from '@/lib/dateUtils';
 
 export default function BudgetPage({ user }) {
   const queryClient = useQueryClient();
@@ -41,9 +42,8 @@ export default function BudgetPage({ user }) {
   // Upcoming 30 days spend
   const upcoming30 = events
     .filter(e => {
-      const d = parseISO(e.event_date);
-      if (!isValid(d)) return false;
-      const days = Math.ceil((d - new Date()) / 86400000);
+      const days = daysUntil(e.event_date);
+      if (days === null) return false;
       return days >= 0 && days <= 30;
     })
     .reduce((s, e) => s + (e.budget || 0), 0);

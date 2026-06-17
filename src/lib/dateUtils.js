@@ -1,4 +1,4 @@
-import { addDays, subDays, differenceInDays, format, parseISO, isValid } from 'date-fns';
+import { addDays, subDays, differenceInCalendarDays, format, parseISO, isValid } from 'date-fns';
 
 export function computeBuyDates(eventDateStr) {
   const eventDate = parseISO(eventDateStr);
@@ -9,11 +9,19 @@ export function computeBuyDates(eventDateStr) {
   };
 }
 
-export function daysUntil(dateStr) {
+export function daysUntil(dateStr, now = new Date()) {
   if (!dateStr) return null;
   const d = parseISO(dateStr);
   if (!isValid(d)) return null;
-  return differenceInDays(d, new Date());
+  return differenceInCalendarDays(d, now);
+}
+
+export function relativeDayLabel(daysAway, compact = false) {
+  if (daysAway === null) return '';
+  if (daysAway < 0) return 'Past';
+  if (daysAway === 0) return 'Today';
+  if (daysAway === 1) return 'Tomorrow';
+  return compact ? `${daysAway}d` : `${daysAway} days away`;
 }
 
 export function formatEventDate(dateStr) {

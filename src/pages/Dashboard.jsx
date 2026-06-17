@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { Plus, Sparkles, Package, Mail } from 'lucide-react';
-import { getUpcomingEvents, daysUntil, urgencyColor, formatEventDate } from '@/lib/dateUtils';
+import { getUpcomingEvents, daysUntil, urgencyColor, formatEventDate, relativeDayLabel } from '@/lib/dateUtils';
 import PriorityBadge from '@/components/PriorityBadge';
 import ProfileNudge from '@/components/ProfileNudge';
 import ActionQueue from '@/components/ActionQueue';
@@ -21,7 +21,7 @@ function getNextActionLabel(days) {
 function groupByMonth(events) {
   const groups = {};
   events.forEach(event => {
-    const d = new Date(event.event_date);
+    const d = new Date(`${event.event_date}T00:00:00`);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const label = d.toLocaleString('default', { month: 'long', year: 'numeric' });
     if (!groups[key]) groups[key] = { label, events: [] };
@@ -110,7 +110,7 @@ function UpcomingByMonth({ upcoming }) {
                         </span>
                       ) : (
                         <span className={`text-sm font-medium ${urgencyColor(days)}`}>
-                          {days === 0 ? 'Today!' : days < 0 ? 'Past' : `${days}d`}
+                          {relativeDayLabel(days, true)}
                         </span>
                       );
                     })()}

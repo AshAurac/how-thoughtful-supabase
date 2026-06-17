@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { daysUntil, formatEventDate } from '@/lib/dateUtils';
+import { daysUntil, formatEventDate, relativeDayLabel } from '@/lib/dateUtils';
 
 // Priority weights: higher = more urgent to act on
 const PRIORITY_WEIGHT = { high: 3, medium: 2, low: 1, free: 0 };
@@ -108,7 +108,7 @@ export default function ActionQueue({ events, gifts }) {
                       {action.label}
                     </span>
                     <p className={`text-xs mt-1 ${isTop ? 'text-white/80' : 'text-muted-foreground'}`}>
-                      {days === 0 ? 'Today' : `${days}d away`}
+                      {relativeDayLabel(days)}
                     </p>
                   </div>
                 </div>

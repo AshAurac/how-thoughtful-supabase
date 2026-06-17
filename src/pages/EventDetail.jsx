@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 import { ArrowLeft, Plus, Trash2, Check, Sparkles, Lightbulb, Pencil, ChevronDown } from 'lucide-react';
-import { formatEventDate, daysUntil, computeBuyDates } from '@/lib/dateUtils';
+import { formatEventDate, daysUntil, computeBuyDates, relativeDayLabel } from '@/lib/dateUtils';
 import PriorityBadge from '@/components/PriorityBadge';
 import NativePicker from '@/components/NativePicker';
 
@@ -326,7 +326,7 @@ export default function EventDetail() {
                 <span className="text-sm text-muted-foreground">{formatEventDate(event.event_date)}</span>
                 {days !== null && days >= 0 && (
                   <span className={`text-sm font-medium ${days <= 7 ? 'text-terracotta' : 'text-muted-foreground'}`}>
-                    {days === 0 ? 'Today!' : `${days} days away`}
+                    {relativeDayLabel(days)}
                   </span>
                 )}
               </div>
@@ -371,7 +371,7 @@ export default function EventDetail() {
                   t.days !== null && t.days <= 3 ? 'text-terracotta' :
                   t.days !== null && t.days <= 7 ? 'text-butter-dark' : 'text-muted-foreground'
                 }`}>
-                  {t.days !== null && t.days < 0 ? 'Passed' : t.days === 0 ? 'Today' : t.days !== null ? `in ${t.days}d` : formatEventDate(t.date)}
+                  {t.days !== null && t.days < 0 ? 'Passed' : t.days === 0 ? 'Today' : t.days === 1 ? 'Tomorrow' : t.days !== null ? `in ${t.days}d` : formatEventDate(t.date)}
                 </span>
               </div>
             ))}
