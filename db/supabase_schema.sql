@@ -96,6 +96,7 @@ create table if not exists gifts (
   card_written boolean default false,
   is_claimed boolean default false,
   claimed_by_name text,
+  given boolean default false,
   sent boolean default false,
   order_number text,
   tracking_url text,

@@ -14,11 +14,11 @@ const PRIORITY_LABEL_COLOR = {
 // Returns next action label based on days until event
 function getNextAction(days, gifts = []) {
   const allBought = gifts.length > 0 && gifts.every(g => g.bought);
-  const allSent = gifts.length > 0 && gifts.every(g => g.sent);
+  const allGiven = gifts.length > 0 && gifts.every(g => g.given || g.sent);
 
   if (days <= 0) return { label: 'Today!', urgent: true };
-  if (allSent) return { label: 'All done ✓', urgent: false };
-  if (allBought && days <= 7) return { label: 'Wrap & send', urgent: days <= 3 };
+  if (allGiven) return { label: 'All done ✓', urgent: false };
+  if (allBought && days <= 7) return { label: 'Wrap & give', urgent: days <= 3 };
   if (days <= 7) return { label: 'Buy now', urgent: true };
   if (days <= 14) return { label: 'Buy gift now', urgent: true };
   if (days <= 28) return { label: 'Plan gift', urgent: false };

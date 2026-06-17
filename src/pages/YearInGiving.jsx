@@ -126,7 +126,7 @@ export default function YearInGiving({ user }) {
 
   const totalSpent = gifts.reduce((s, g) => s + (g.price || 0), 0);
   const freeGifts = gifts.filter(g => !g.price || g.price === 0).length;
-  const boughtGifts = gifts.filter(g => g.bought).length;
+  const givenGifts = gifts.filter(g => g.given || g.sent).length;
 
   // Top person
   const recipientCount = {};
@@ -188,7 +188,7 @@ export default function YearInGiving({ user }) {
         {/* 2×2 stat grid */}
         <div className="grid grid-cols-2 gap-3">
           <StatCard eyebrow="occasions" value={yearEvents.length} label="people celebrated" delay={500} />
-          <StatCard eyebrow="gifts" value={boughtGifts} label="given with intention" delay={700} />
+          <StatCard eyebrow="gifts" value={givenGifts} label="given with intention" delay={700} />
           <StatCard eyebrow="spent" value={`$${Math.round(totalSpent)}`} label="on those you love" delay={900} />
           <StatCard eyebrow="free gifts" value={freeGifts} label="gifts of time & skill" delay={1100} />
         </div>

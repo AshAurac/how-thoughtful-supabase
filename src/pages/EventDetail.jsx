@@ -129,7 +129,14 @@ export default function EventDetail() {
       giver_name: event.giver_name || '',
       love_language: event.love_language || '',
       total_spent: totalSpent,
-      gifts_given: gifts.map(g => ({ name: g.name, price: g.price || 0, description: g.description || '' })),
+      gifts_given: gifts
+        .filter(g => g.given || g.sent || g.bought)
+        .map(g => ({
+          name: g.name,
+          price: g.price || 0,
+          description: g.description || '',
+          given: Boolean(g.given || g.sent),
+        })),
     });
     // Archive the occasion so it disappears from the dashboard
     await base44.entities.Event.update(id, { completed: true });
@@ -152,9 +159,11 @@ export default function EventDetail() {
 
   const handleGiftCheck = (gift, field) => {
     const newValue = !gift[field];
-    updateGiftMutation.mutate({ giftId: gift.id, data: { [field]: newValue } });
-    // Trigger bounce when marking 'sent' as done (the final step)
-    if (field === 'sent' && newValue) {
+    const data = { [field]: newValue };
+    if (field === 'given') data.sent = newValue;
+    updateGiftMutation.mutate({ giftId: gift.id, data });
+    // Trigger bounce when marking 'given' as done (the final step)
+    if (field === 'given' && newValue) {
       setCelebratingGift(gift.id);
     }
   };
@@ -411,7 +420,7 @@ export default function EventDetail() {
                   <GiftCheckbox checked={gift.bought} onChange={() => handleGiftCheck(gift, 'bought')} label="Bought" />
                   <GiftCheckbox checked={gift.wrapped} onChange={() => handleGiftCheck(gift, 'wrapped')} label="Wrapped" />
                   <GiftCheckbox checked={gift.card_written} onChange={() => handleGiftCheck(gift, 'card_written')} label="Card" />
-                  <GiftCheckbox checked={gift.sent} onChange={() => handleGiftCheck(gift, 'sent')} label="Sent" />
+                  <GiftCheckbox checked={gift.given || gift.sent} onChange={() => handleGiftCheck({ ...gift, given: gift.given || gift.sent }, 'given')} label="Given" />
                 </div>
               </div>
             ))}

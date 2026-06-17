@@ -157,7 +157,7 @@ Priority colors (from `PriorityBadge`): free → muted, low → blue-ish, medium
 A person being gifted to. Key fields: `name`, `relationship`, `age`, `interests[]`, `notes`, `love_language`, `avatar_url`
 
 ### Gift
-A specific gift item attached to an Event. Tracks full lifecycle: `bought`, `wrapped`, `card_written`, `sent`, `delivery_status` (none/ordered/shipped/delivered), `tracking_url`, `expected_arrival`, `order_number`
+A specific gift item attached to an Event. Tracks full lifecycle: `bought`, `wrapped`, `card_written`, `given`, `delivery_status` (none/ordered/shipped/delivered), `tracking_url`, `expected_arrival`, `order_number`
 
 ### GiftHistory
 Archived record after an event is completed. Preserves `gifts_given[]`, `total_spent`, `reflection`.
