@@ -95,8 +95,8 @@ function CheckoutButton({ product, billing, label, className, user, onBlocked })
       } else {
         toast.error('Could not start checkout. Please try again.');
       }
-    } catch {
-      toast.error('Something went wrong. Please try again.');
+    } catch (error) {
+      toast.error(error?.message || 'Something went wrong. Please try again.');
     }
     setLoading(false);
   };

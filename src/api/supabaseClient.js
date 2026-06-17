@@ -256,7 +256,14 @@ const functions = {
     });
 
     if (error) {
-      throw error;
+      let message = error.message;
+      try {
+        const details = await error.context?.json?.();
+        message = details?.error || details?.message || message;
+      } catch {
+        // Keep the original Supabase error when the function response is not JSON.
+      }
+      throw new Error(message);
     }
 
     return data;
