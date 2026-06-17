@@ -26,21 +26,49 @@ const PRICE_IDS: Record<string, string> = {
 const supabaseAdmin = createClient(SUPABASE_URL || '', SUPABASE_SERVICE_KEY || '');
 const stripe = new Stripe(STRIPE_SECRET_KEY || '');
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+};
+
+const json = (body: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  });
+
 serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   try {
     if (!STRIPE_SECRET_KEY) {
-      return new Response(JSON.stringify({ error: 'STRIPE_SECRET_KEY is not configured in Supabase secrets' }), { status: 500 });
+      return json({ error: 'STRIPE_SECRET_KEY is not configured in Supabase secrets' }, 500);
+    }
+
+    const authHeader = req.headers.get('authorization') || '';
+    const accessToken = authHeader.toLowerCase().startsWith('bearer ')
+      ? authHeader.slice(7)
+      : '';
+
+    const { data: userResult, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
+    const user = userResult?.user;
+    if (userError || !user?.email) {
+      return json({ error: 'Please log in again before upgrading.' }, 401);
     }
 
     const { product, user_email, success_url, cancel_url } = await req.json();
-    if (!product || !PRICE_IDS[product]) return new Response(JSON.stringify({ error: 'Invalid product' }), { status: 400 });
+    if (!product || !PRICE_IDS[product]) return json({ error: 'Invalid product' }, 400);
 
     const priceId = PRICE_IDS[product];
     if (!priceId || priceId.includes('placeholder')) {
-      return new Response(JSON.stringify({ error: `Stripe price for ${product} is not configured` }), { status: 500 });
+      return json({ error: `Stripe price for ${product} is not configured` }, 500);
     }
 
     const [plan, billing] = product.includes('_') ? product.split('_') : ['individual', product];
+    const customerEmail = user.email || user_email || '';
 
     const sessionParams: any = {
       payment_method_types: ['card'],
@@ -48,17 +76,17 @@ serve(async (req) => {
       mode: 'subscription',
       success_url: success_url || `${req.headers.get('origin')}/upgrade?success=true&product=${product}`,
       cancel_url: cancel_url || `${req.headers.get('origin')}/upgrade`,
-      metadata: { product, plan, billing, user_email: user_email || '' },
+      metadata: { product, plan, billing, user_email: customerEmail },
       subscription_data: {
-        metadata: { product, plan, billing, user_email: user_email || '' }
+        metadata: { product, plan, billing, user_email: customerEmail }
       }
     };
-    if (user_email) sessionParams.customer_email = user_email;
+    if (customerEmail) sessionParams.customer_email = customerEmail;
 
     const session = await stripe.checkout.sessions.create(sessionParams);
-    return new Response(JSON.stringify({ url: session.url, session_id: session.id }));
+    return json({ url: session.url, session_id: session.id });
   } catch (err) {
     console.error('createCheckout error', err);
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    return json({ error: err.message }, 500);
   }
 });
