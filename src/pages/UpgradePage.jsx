@@ -64,8 +64,10 @@ const PLANS = [
 
 function CheckoutButton({ product, billing, label, className, user, onBlocked }) {
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleClick = async () => {
+    setErrorMessage('');
     const isIframe = window.self !== window.top;
     if (isIframe) {
       alert('Checkout only works from the published app — please open it directly in your browser.');
@@ -77,7 +79,9 @@ function CheckoutButton({ product, billing, label, className, user, onBlocked })
         await base44.auth.resendVerificationEmail(user.email);
         onBlocked?.();
       } catch (error) {
-        toast.error(error?.message || 'Could not send verification email.');
+        const message = error?.message || 'Could not send verification email.';
+        setErrorMessage(message);
+        toast.error(message);
       }
       return;
     }
@@ -93,18 +97,30 @@ function CheckoutButton({ product, billing, label, className, user, onBlocked })
       if (res?.url) {
         window.location.href = res.url;
       } else {
-        toast.error('Could not start checkout. Please try again.');
+        const message = 'Could not start checkout. Please try again.';
+        setErrorMessage(message);
+        toast.error(message);
       }
     } catch (error) {
-      toast.error(error?.message || 'Something went wrong. Please try again.');
+      const message = error?.message || 'Something went wrong. Please try again.';
+      setErrorMessage(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    <button onClick={handleClick} disabled={loading} className={className}>
-      {loading ? 'Loading...' : label}
-    </button>
+    <div className="space-y-2">
+      <button type="button" onClick={handleClick} disabled={loading} className={className}>
+        {loading ? 'Loading...' : label}
+      </button>
+      {errorMessage && (
+        <p className="text-center text-xs font-medium text-terracotta">
+          {errorMessage}
+        </p>
+      )}
+    </div>
   );
 }
 
