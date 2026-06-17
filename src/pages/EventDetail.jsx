@@ -88,6 +88,7 @@ export default function EventDetail() {
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(['gifts', id], ctx.previous);
+      toast.error('Could not save gift checklist. Please try again.');
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['gifts', id] }),
   });
