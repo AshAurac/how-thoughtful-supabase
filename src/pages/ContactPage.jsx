@@ -8,17 +8,25 @@ export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', message: '' });
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSending(true);
-    await base44.integrations.Core.SendEmail({
-      to: 'hello@howthoughtful.app',
-      subject: `Contact form: ${form.name}`,
-      body: `From: ${form.name} <${form.email}>\n\n${form.message}`,
-    });
-    setSent(true);
-    setSending(false);
+    setError('');
+    try {
+      await base44.integrations.Core.SendEmail({
+        to: 'hello@howthoughtful.app',
+        subject: `Contact form: ${form.name}`,
+        body: `From: ${form.name} <${form.email}>\n\n${form.message}`,
+        reply_to: form.email,
+      });
+      setSent(true);
+    } catch (err) {
+      setError(err?.message || 'Could not send your message. Please email hello@howthoughtful.app instead.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -110,6 +118,7 @@ export default function ContactPage() {
               >
                 {sending ? 'Sending…' : 'Send message'}
               </button>
+              {error && <p className="text-sm text-terracotta text-center">{error}</p>}
             </form>
           )}
         </div>

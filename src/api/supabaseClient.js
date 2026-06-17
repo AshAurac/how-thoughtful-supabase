@@ -265,9 +265,8 @@ const functions = {
 
 const integrations = {
   Core: {
-    SendEmail: async () => {
-      console.warn('SendEmail is not configured. Add a Supabase Edge Function or a third-party email provider to enable this feature.');
-      return { success: false, message: 'SendEmail not configured' };
+    SendEmail: async (payload) => {
+      return functions.invoke('sendContactEmail', payload);
     },
     InvokeLLM: async (payload) => {
       return functions.invoke('invokeLLM', payload);

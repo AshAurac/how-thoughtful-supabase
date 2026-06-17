@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Check, Home, Star } from 'lucide-react';
 import { toast } from 'sonner';
+import { isEmailVerified } from '@/lib/authStatus';
 
 const PLANS = [
   {
@@ -71,7 +72,7 @@ function CheckoutButton({ product, billing, label, className, user, onBlocked })
       return;
     }
 
-    if (!user?.email_confirmed_at) {
+    if (!isEmailVerified(user)) {
       try {
         await base44.auth.resendVerificationEmail(user.email);
         onBlocked?.();

@@ -26,14 +26,20 @@ export default function FeedbackCard({ user }) {
     const body = mode === 'review'
       ? `Rating: ${rating}/5\nFrom: ${user?.full_name} (${user?.email})\n\n${text}`
       : `From: ${user?.full_name} (${user?.email})\n\n${text}`;
-    await base44.integrations.Core.SendEmail({
-      to: 'hello@howthoughtful.app',
-      subject,
-      body,
-    });
-    setSending(false);
-    setDone(true);
-    toast.success(mode === 'review' ? 'Thank you so much! 💛' : 'Idea sent! We love hearing from you 💛');
+    try {
+      await base44.integrations.Core.SendEmail({
+        to: 'hello@howthoughtful.app',
+        subject,
+        body,
+        reply_to: user?.email,
+      });
+      setDone(true);
+      toast.success(mode === 'review' ? 'Thank you so much! 💛' : 'Idea sent! We love hearing from you 💛');
+    } catch (err) {
+      toast.error(err?.message || 'Could not send that just now.');
+    } finally {
+      setSending(false);
+    }
   };
 
   if (dismissed) return null;

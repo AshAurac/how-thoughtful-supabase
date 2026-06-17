@@ -33,7 +33,9 @@ serve(async (req) => {
           await supabaseAdmin.from('user_profiles').update({
             is_premium: true,
             premium_type: product,
-            premium_since: new Date().toISOString()
+            premium_since: new Date().toISOString(),
+            stripe_customer_id: session.customer || null,
+            stripe_subscription_id: session.subscription || null
           }).eq('id', profile.id);
         }
       }
