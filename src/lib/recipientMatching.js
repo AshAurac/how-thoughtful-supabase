@@ -71,6 +71,10 @@ export function recipientPayloadFromForm(data) {
         ? data.interests.split(',').map(s => s.trim()).filter(Boolean)
         : [],
     notes: data.notes || '',
+    style_preferences: data.style_preferences || '',
+    gift_likes: data.gift_likes || '',
+    gift_avoidances: data.gift_avoidances || '',
+    wishlist_notes: data.wishlist_notes || '',
   };
 }
 
@@ -80,8 +84,8 @@ export function mergeRecipientPayload(existing, incoming) {
     if (value === undefined || value === null || value === '') return acc;
     if (Array.isArray(value) && value.length === 0) return acc;
 
-    if (key === 'notes' && existing?.notes && existing.notes !== value) {
-      acc.notes = `${existing.notes}\n\n${value}`;
+    if (['notes', 'style_preferences', 'gift_likes', 'gift_avoidances', 'wishlist_notes'].includes(key) && existing?.[key] && existing[key] !== value) {
+      acc[key] = `${existing[key]}\n\n${value}`;
       return acc;
     }
 

@@ -255,6 +255,39 @@ export default function EventDetail() {
                 rows={2}
                 className="w-full border border-border rounded-xl px-3 py-2 text-foreground bg-card focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none text-sm"
               />
+              <details className="rounded-2xl border border-border bg-card px-3 py-2">
+                <summary className="cursor-pointer text-sm font-heading font-semibold text-foreground">Extra details for this occasion</summary>
+                <div className="mt-3 space-y-2">
+                  <textarea
+                    value={editForm.style_preferences}
+                    onChange={e => setEditForm(f => ({ ...f, style_preferences: e.target.value }))}
+                    placeholder="Style and preferences"
+                    rows={2}
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm text-foreground bg-muted focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
+                  />
+                  <textarea
+                    value={editForm.gift_likes}
+                    onChange={e => setEditForm(f => ({ ...f, gift_likes: e.target.value }))}
+                    placeholder="Things they love"
+                    rows={2}
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm text-foreground bg-muted focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
+                  />
+                  <textarea
+                    value={editForm.gift_avoidances}
+                    onChange={e => setEditForm(f => ({ ...f, gift_avoidances: e.target.value }))}
+                    placeholder="Things to avoid"
+                    rows={2}
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm text-foreground bg-muted focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
+                  />
+                  <textarea
+                    value={editForm.wishlist_notes}
+                    onChange={e => setEditForm(f => ({ ...f, wishlist_notes: e.target.value }))}
+                    placeholder="Wishlist or past gift notes"
+                    rows={2}
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm text-foreground bg-muted focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
+                  />
+                </div>
+              </details>
               <div className="flex gap-2">
                 <button
                   onClick={() => {
@@ -281,7 +314,7 @@ export default function EventDetail() {
               <div className="flex items-center gap-2">
               <h1 className="font-heading font-bold text-2xl text-foreground">{event.recipient_name}</h1>
               <button
-                onClick={() => { setEditForm({ recipient_name: event.recipient_name, giver_name: event.giver_name || '', occasion: event.occasion, event_date: event.event_date, priority: event.priority, budget: event.budget || '', age_or_years: event.age_or_years || '', notes: event.notes || '' }); setEditingEvent(true); }}
+                onClick={() => { setEditForm({ recipient_name: event.recipient_name, giver_name: event.giver_name || '', occasion: event.occasion, event_date: event.event_date, priority: event.priority, budget: event.budget || '', age_or_years: event.age_or_years || '', notes: event.notes || '', style_preferences: event.style_preferences || '', gift_likes: event.gift_likes || '', gift_avoidances: event.gift_avoidances || '', wishlist_notes: event.wishlist_notes || '' }); setEditingEvent(true); }}
                 className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
               >
                 <Pencil className="w-4 h-4" />
@@ -450,7 +483,7 @@ export default function EventDetail() {
       <EventChecklist occasion={event.occasion} />
 
       {/* Notes dropdown */}
-      {event.notes && !editingEvent && (
+      {(event.notes || event.style_preferences || event.gift_likes || event.gift_avoidances || event.wishlist_notes) && !editingEvent && (
         <div className="bg-muted border border-border rounded-2xl overflow-hidden">
           <button
             onClick={() => setShowNotes(v => !v)}
@@ -460,8 +493,12 @@ export default function EventDetail() {
             <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${showNotes ? 'rotate-180' : ''}`} />
           </button>
           {showNotes && (
-            <div className="px-4 pb-4">
-              <p className="text-sm text-foreground whitespace-pre-wrap">{event.notes}</p>
+            <div className="px-4 pb-4 space-y-2">
+              {event.notes && <p className="text-sm text-foreground whitespace-pre-wrap">{event.notes}</p>}
+              {event.style_preferences && <p className="text-sm text-muted-foreground whitespace-pre-wrap"><span className="font-medium text-foreground">Style:</span> {event.style_preferences}</p>}
+              {event.gift_likes && <p className="text-sm text-muted-foreground whitespace-pre-wrap"><span className="font-medium text-foreground">Loves:</span> {event.gift_likes}</p>}
+              {event.gift_avoidances && <p className="text-sm text-muted-foreground whitespace-pre-wrap"><span className="font-medium text-foreground">Avoid:</span> {event.gift_avoidances}</p>}
+              {event.wishlist_notes && <p className="text-sm text-muted-foreground whitespace-pre-wrap"><span className="font-medium text-foreground">Wishlist:</span> {event.wishlist_notes}</p>}
             </div>
           )}
         </div>

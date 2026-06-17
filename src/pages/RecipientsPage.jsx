@@ -24,7 +24,11 @@ export default function RecipientsPage({ user }) {
     relationship: '',
     love_language: '',
     interests: '',
-    notes: ''
+    notes: '',
+    style_preferences: '',
+    gift_likes: '',
+    gift_avoidances: '',
+    wishlist_notes: ''
   });
 
   const updateForm = (updates) => {
@@ -49,7 +53,7 @@ export default function RecipientsPage({ user }) {
   });
 
   const resetForm = () => {
-    setForm({ name: '', age: '', birthday_month: '', birthday_day: '', relationship: '', love_language: '', interests: '', notes: '' });
+    setForm({ name: '', age: '', birthday_month: '', birthday_day: '', relationship: '', love_language: '', interests: '', notes: '', style_preferences: '', gift_likes: '', gift_avoidances: '', wishlist_notes: '' });
     setDuplicateMatch(null);
   };
 
@@ -210,6 +214,39 @@ export default function RecipientsPage({ user }) {
             rows={3}
             className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
           />
+          <details className="rounded-2xl border border-border bg-card px-3 py-2">
+            <summary className="cursor-pointer text-sm font-heading font-semibold text-foreground">Extra details for better gift ideas</summary>
+            <div className="mt-3 space-y-2">
+              <textarea
+                value={form.style_preferences}
+                onChange={e => updateForm({ style_preferences: e.target.value })}
+                placeholder="Style and preferences"
+                rows={2}
+                className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
+              />
+              <textarea
+                value={form.gift_likes}
+                onChange={e => updateForm({ gift_likes: e.target.value })}
+                placeholder="Things they love"
+                rows={2}
+                className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
+              />
+              <textarea
+                value={form.gift_avoidances}
+                onChange={e => updateForm({ gift_avoidances: e.target.value })}
+                placeholder="Things to avoid"
+                rows={2}
+                className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
+              />
+              <textarea
+                value={form.wishlist_notes}
+                onChange={e => updateForm({ wishlist_notes: e.target.value })}
+                placeholder="Wishlist or past gift notes"
+                rows={2}
+                className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
+              />
+            </div>
+          </details>
           {duplicateMatch && (
             <div className="bg-butter/30 border border-butter rounded-2xl p-3 space-y-2">
               <p className="text-sm font-heading font-semibold text-foreground">

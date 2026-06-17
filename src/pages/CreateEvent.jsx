@@ -12,6 +12,7 @@ import { nextBirthdayDate } from '@/lib/birthdayOccasions';
 
 const OCCASIONS = ['birthday','anniversary','holiday','graduation','baby_shower','wedding','housewarming','thank_you','just_because','other'];
 const PRIORITIES = ['free','low','medium','high'];
+const EXTRA_DETAIL_FIELDS = ['style_preferences', 'gift_likes', 'gift_avoidances', 'wishlist_notes'];
 
 // Returns a contextual label for the age/years field
 function ageLabel(occasion) {
@@ -23,7 +24,11 @@ function ageLabel(occasion) {
   return 'Age / Years (optional)';
 }
 
-function recipientUpdatesFromEvent(data) {
+function hasExtraDetails(data) {
+  return EXTRA_DETAIL_FIELDS.some(field => String(data[field] || '').trim());
+}
+
+function recipientUpdatesFromEvent(data, { includeExtraDetails = false } = {}) {
   const updates = {};
 
   if (data.occasion === 'birthday' && data.event_date) {
@@ -37,6 +42,11 @@ function recipientUpdatesFromEvent(data) {
 
   if (data.love_language) updates.love_language = data.love_language;
   if (data.notes) updates.notes = data.notes;
+  if (includeExtraDetails) {
+    EXTRA_DETAIL_FIELDS.forEach(field => {
+      if (data[field]) updates[field] = data[field];
+    });
+  }
 
   return updates;
 }
@@ -46,6 +56,10 @@ function mergeRecipientUpdates(existing, updates) {
     if (value === undefined || value === null || value === '') return acc;
     if (key === 'notes' && existing?.notes && existing.notes !== value) {
       acc.notes = `${existing.notes}\n\n${value}`;
+      return acc;
+    }
+    if (EXTRA_DETAIL_FIELDS.includes(key) && existing?.[key] && existing[key] !== value) {
+      acc[key] = `${existing[key]}\n\n${value}`;
       return acc;
     }
     if (!existing?.[key]) acc[key] = value;
@@ -64,6 +78,9 @@ function eventFormDefaultsFromRecipient(recipient, occasion, form) {
   }
   if (recipient.love_language && !form.love_language) defaults.love_language = recipient.love_language;
   if (recipient.notes && !form.notes) defaults.notes = recipient.notes;
+  EXTRA_DETAIL_FIELDS.forEach(field => {
+    if (recipient[field] && !form[field]) defaults[field] = recipient[field];
+  });
 
   return defaults;
 }
@@ -75,10 +92,12 @@ export default function CreateEvent() {
     recipient_name: '', giver_name: '', occasion: 'birthday', event_date: '',
     budget: '', priority: 'medium', recurring: false,
     notes: '', reflection: '', love_language: '', age_or_years: '',
+    style_preferences: '', gift_likes: '', gift_avoidances: '', wishlist_notes: '',
   });
   const [showRecipientPicker, setShowRecipientPicker] = useState(false);
   const [showGiverPicker, setShowGiverPicker] = useState(false);
   const [selectedRecipientId, setSelectedRecipientId] = useState(null);
+  const [saveExtraToProfile, setSaveExtraToProfile] = useState(true);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -122,7 +141,7 @@ export default function CreateEvent() {
       });
 
       // Keep the person profile useful when an occasion reveals birthday/context details.
-      const profileUpdates = recipientUpdatesFromEvent(data);
+      const profileUpdates = recipientUpdatesFromEvent(data, { includeExtraDetails: saveExtraToProfile });
       if (!selectedRecipientId && data.recipient_name) {
         const match = findRecipientMatch(data.recipient_name, recipients);
         if (!match) {
@@ -176,6 +195,8 @@ export default function CreateEvent() {
       age_or_years: form.age_or_years ? parseInt(form.age_or_years) : null,
     });
   };
+
+  const showSaveExtraPrompt = hasExtraDetails(form) && Boolean(form.recipient_name);
 
   return (
     <div className="space-y-6 max-w-lg mx-auto">
@@ -366,6 +387,53 @@ export default function CreateEvent() {
             className="w-full border border-border rounded-2xl px-4 py-3 text-foreground bg-card focus:outline-none focus:ring-2 focus:ring-terracotta/50 font-body resize-none"
           />
         </div>
+
+        <details className="rounded-2xl border border-border bg-card px-4 py-3">
+          <summary className="cursor-pointer text-sm font-heading font-semibold text-foreground">Extra details for this occasion</summary>
+          <div className="mt-3 space-y-3">
+            <textarea
+              value={form.style_preferences}
+              onChange={e => set('style_preferences', e.target.value)}
+              placeholder="Style and preferences"
+              rows={2}
+              className="w-full border border-border rounded-2xl px-4 py-3 text-sm text-foreground bg-muted focus:outline-none focus:ring-2 focus:ring-terracotta/50 font-body resize-none"
+            />
+            <textarea
+              value={form.gift_likes}
+              onChange={e => set('gift_likes', e.target.value)}
+              placeholder="Things they love"
+              rows={2}
+              className="w-full border border-border rounded-2xl px-4 py-3 text-sm text-foreground bg-muted focus:outline-none focus:ring-2 focus:ring-terracotta/50 font-body resize-none"
+            />
+            <textarea
+              value={form.gift_avoidances}
+              onChange={e => set('gift_avoidances', e.target.value)}
+              placeholder="Things to avoid"
+              rows={2}
+              className="w-full border border-border rounded-2xl px-4 py-3 text-sm text-foreground bg-muted focus:outline-none focus:ring-2 focus:ring-terracotta/50 font-body resize-none"
+            />
+            <textarea
+              value={form.wishlist_notes}
+              onChange={e => set('wishlist_notes', e.target.value)}
+              placeholder="Wishlist or past gift notes"
+              rows={2}
+              className="w-full border border-border rounded-2xl px-4 py-3 text-sm text-foreground bg-muted focus:outline-none focus:ring-2 focus:ring-terracotta/50 font-body resize-none"
+            />
+            {showSaveExtraPrompt && (
+              <label className="flex items-start gap-3 rounded-2xl bg-moss/10 border border-moss/20 px-3 py-3">
+                <input
+                  type="checkbox"
+                  checked={saveExtraToProfile}
+                  onChange={e => setSaveExtraToProfile(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-moss"
+                />
+                <span className="text-sm text-foreground">
+                  Also save this to {form.recipient_name}'s profile
+                </span>
+              </label>
+            )}
+          </div>
+        </details>
 
         <div className="flex items-center gap-3">
           <input

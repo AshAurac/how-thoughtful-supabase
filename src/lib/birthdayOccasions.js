@@ -105,6 +105,10 @@ export function birthdayEventPayloadFromRecipient(recipient, now = new Date()) {
   if (recipient.age) payload.age_or_years = toInt(recipient.age);
   if (recipient.love_language) payload.love_language = recipient.love_language;
   if (recipient.notes) payload.notes = recipient.notes;
+  if (recipient.style_preferences) payload.style_preferences = recipient.style_preferences;
+  if (recipient.gift_likes) payload.gift_likes = recipient.gift_likes;
+  if (recipient.gift_avoidances) payload.gift_avoidances = recipient.gift_avoidances;
+  if (recipient.wishlist_notes) payload.wishlist_notes = recipient.wishlist_notes;
 
   return payload;
 }
@@ -114,7 +118,7 @@ export function birthdayEventUpdatesFromRecipient(event, recipient) {
   if (!payload || !event) return null;
 
   const updates = {};
-  const fillIfMissing = ['priority', 'love_language', 'age_or_years', 'notes', 'reminders_sent'];
+  const fillIfMissing = ['priority', 'love_language', 'age_or_years', 'notes', 'style_preferences', 'gift_likes', 'gift_avoidances', 'wishlist_notes', 'reminders_sent'];
 
   if (event.recipient_name !== payload.recipient_name) updates.recipient_name = payload.recipient_name;
   if (payload.recipient_id && event.recipient_id !== payload.recipient_id) updates.recipient_id = payload.recipient_id;

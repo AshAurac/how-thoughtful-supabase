@@ -17,7 +17,11 @@ const emptyForm = {
   relationship: '',
   love_language: '',
   interests: '',
-  notes: ''
+  notes: '',
+  style_preferences: '',
+  gift_likes: '',
+  gift_avoidances: '',
+  wishlist_notes: ''
 };
 
 function formatBirthday(month, day) {
@@ -52,7 +56,11 @@ export default function RecipientDetail() {
       relationship: recipient.relationship || '',
       love_language: recipient.love_language || '',
       interests: (recipient.interests || []).join(', '),
-      notes: recipient.notes || ''
+      notes: recipient.notes || '',
+      style_preferences: recipient.style_preferences || '',
+      gift_likes: recipient.gift_likes || '',
+      gift_avoidances: recipient.gift_avoidances || '',
+      wishlist_notes: recipient.wishlist_notes || ''
     });
   }, [recipient]);
 
@@ -82,7 +90,11 @@ export default function RecipientDetail() {
         relationship: form.relationship.trim(),
         love_language: form.love_language,
         interests: form.interests ? form.interests.split(',').map(s => s.trim()).filter(Boolean) : [],
-        notes: form.notes.trim()
+        notes: form.notes.trim(),
+        style_preferences: form.style_preferences.trim(),
+        gift_likes: form.gift_likes.trim(),
+        gift_avoidances: form.gift_avoidances.trim(),
+        wishlist_notes: form.wishlist_notes.trim()
       });
       const birthdaySync = await syncBirthdayEventForRecipient({
         recipient: updatedRecipient,
@@ -167,7 +179,11 @@ export default function RecipientDetail() {
               relationship: recipient.relationship || '',
               love_language: recipient.love_language || '',
               interests: (recipient.interests || []).join(', '),
-              notes: recipient.notes || ''
+              notes: recipient.notes || '',
+              style_preferences: recipient.style_preferences || '',
+              gift_likes: recipient.gift_likes || '',
+              gift_avoidances: recipient.gift_avoidances || '',
+              wishlist_notes: recipient.wishlist_notes || ''
             }); }}>
               <X className="w-4 h-4 text-muted-foreground" />
             </button>
@@ -235,6 +251,39 @@ export default function RecipientDetail() {
             rows={4}
             className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
           />
+          <details className="rounded-2xl border border-border bg-card px-3 py-2">
+            <summary className="cursor-pointer text-sm font-heading font-semibold text-foreground">Extra details for better gift ideas</summary>
+            <div className="mt-3 space-y-2">
+              <textarea
+                value={form.style_preferences}
+                onChange={e => setForm(f => ({ ...f, style_preferences: e.target.value }))}
+                placeholder="Style and preferences"
+                rows={2}
+                className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
+              />
+              <textarea
+                value={form.gift_likes}
+                onChange={e => setForm(f => ({ ...f, gift_likes: e.target.value }))}
+                placeholder="Things they love"
+                rows={2}
+                className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
+              />
+              <textarea
+                value={form.gift_avoidances}
+                onChange={e => setForm(f => ({ ...f, gift_avoidances: e.target.value }))}
+                placeholder="Things to avoid"
+                rows={2}
+                className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
+              />
+              <textarea
+                value={form.wishlist_notes}
+                onChange={e => setForm(f => ({ ...f, wishlist_notes: e.target.value }))}
+                placeholder="Wishlist or past gift notes"
+                rows={2}
+                className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
+              />
+            </div>
+          </details>
           <button
             type="submit"
             disabled={updateMutation.isPending}
@@ -272,7 +321,7 @@ export default function RecipientDetail() {
       </div>
 
       {/* Love language + interests */}
-      {(birthday || recipient.age || recipient.love_language || recipient.notes || (recipient.interests || []).length > 0) && (
+      {(birthday || recipient.age || recipient.love_language || recipient.notes || recipient.style_preferences || recipient.gift_likes || recipient.gift_avoidances || recipient.wishlist_notes || (recipient.interests || []).length > 0) && (
         <div className="bg-muted border border-border rounded-2xl p-4 space-y-2">
           {birthday && (
             <div className="flex items-center gap-2">
@@ -309,6 +358,14 @@ export default function RecipientDetail() {
           )}
           {recipient.notes && (
             <p className="text-sm text-muted-foreground whitespace-pre-line pt-1">{recipient.notes}</p>
+          )}
+          {(recipient.style_preferences || recipient.gift_likes || recipient.gift_avoidances || recipient.wishlist_notes) && (
+            <div className="space-y-2 pt-2 border-t border-border">
+              {recipient.style_preferences && <p className="text-sm text-muted-foreground whitespace-pre-line"><span className="font-medium text-foreground">Style:</span> {recipient.style_preferences}</p>}
+              {recipient.gift_likes && <p className="text-sm text-muted-foreground whitespace-pre-line"><span className="font-medium text-foreground">Loves:</span> {recipient.gift_likes}</p>}
+              {recipient.gift_avoidances && <p className="text-sm text-muted-foreground whitespace-pre-line"><span className="font-medium text-foreground">Avoid:</span> {recipient.gift_avoidances}</p>}
+              {recipient.wishlist_notes && <p className="text-sm text-muted-foreground whitespace-pre-line"><span className="font-medium text-foreground">Wishlist:</span> {recipient.wishlist_notes}</p>}
+            </div>
           )}
         </div>
       )}

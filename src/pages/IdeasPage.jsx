@@ -59,6 +59,7 @@ function IdeaCard({ idea, onSave, saved }) {
 export default function IdeasPage({ user }) {
   const urlParams = new URLSearchParams(window.location.search);
   const defaultTab = urlParams.get('tab') === 'curated' ? 'curated' : 'ai';
+  const eventId = urlParams.get('event_id');
 
   const [tab, setTab] = useState(defaultTab);
   const [ideas, setIdeas] = useState([]);
@@ -99,9 +100,32 @@ export default function IdeasPage({ user }) {
     enabled: !!user,
   });
 
+  const { data: currentEvent } = useQuery({
+    queryKey: ['ideaEvent', eventId],
+    queryFn: async () => {
+      const events = await base44.entities.Event.filter({ id: eventId });
+      return events[0] || null;
+    },
+    enabled: !!user && !!eventId,
+  });
+
   useEffect(() => {
     setSavedIds(new Set(savedIdeas.map(s => s.name)));
   }, [savedIdeas]);
+
+  useEffect(() => {
+    if (!currentEvent) return;
+    setRecipient(currentEvent.recipient_name || '');
+    setOccasion(currentEvent.occasion || 'birthday');
+    setBudget(String(currentEvent.budget || 50));
+    if (currentEvent.recipient_id) setSelectedRecipientId(currentEvent.recipient_id);
+  }, [currentEvent]);
+
+  useEffect(() => {
+    if (selectedRecipientId || !recipient || recipients.length === 0) return;
+    const match = recipients.find(r => r.name?.toLowerCase() === recipient.toLowerCase());
+    if (match) setSelectedRecipientId(match.id);
+  }, [recipient, recipients, selectedRecipientId]);
 
   const isPremium = profile?.is_premium;
 
@@ -146,6 +170,17 @@ export default function IdeasPage({ user }) {
       if (recipientProfile?.interests?.length) recipientLines.push(`Known interests & hobbies: ${recipientProfile.interests.join(', ')}`);
       if (recipientProfile?.notes) recipientLines.push(`Personal notes about them: ${recipientProfile.notes}`);
       if (recipientProfile?.love_language) recipientLines.push(`Their love language: ${recipientProfile.love_language.replace(/_/g, ' ')}`);
+      if (recipientProfile?.style_preferences) recipientLines.push(`Their style and preferences: ${recipientProfile.style_preferences}`);
+      if (recipientProfile?.gift_likes) recipientLines.push(`Things they love: ${recipientProfile.gift_likes}`);
+      if (recipientProfile?.gift_avoidances) recipientLines.push(`Things to avoid: ${recipientProfile.gift_avoidances}`);
+      if (recipientProfile?.wishlist_notes) recipientLines.push(`Wishlist or past gift notes: ${recipientProfile.wishlist_notes}`);
+
+      const occasionLines = [];
+      if (currentEvent?.notes) occasionLines.push(`Occasion notes: ${currentEvent.notes}`);
+      if (currentEvent?.style_preferences) occasionLines.push(`Occasion-specific style/preferences: ${currentEvent.style_preferences}`);
+      if (currentEvent?.gift_likes) occasionLines.push(`Occasion-specific things they love: ${currentEvent.gift_likes}`);
+      if (currentEvent?.gift_avoidances) occasionLines.push(`Occasion-specific things to avoid: ${currentEvent.gift_avoidances}`);
+      if (currentEvent?.wishlist_notes) occasionLines.push(`Occasion-specific wishlist/past gift notes: ${currentEvent.wishlist_notes}`);
 
       const giverLines = [];
       if (profile?.skills?.length) giverLines.push(`Giver's skills (for handmade/personal ideas): ${profile.skills.join(', ')}`);
@@ -159,10 +194,11 @@ export default function IdeasPage({ user }) {
    ${recipientLines.length ? recipientLines.join('\n   ') : 'No profile saved — use the occasion and trends to guide ideas.'}
 
 2. The occasion: ${occasion.replace(/_/g, ' ')} — consider what would feel meaningful and appropriate for this milestone.
+   ${occasionLines.length ? occasionLines.join('\n   ') : 'No extra occasion context.'}
 
 3. Current gift trends — check what is popular and well-reviewed right now that would genuinely fit this person's interests. Do not suggest generic trending gifts if they don't match the recipient.
 
-4. LEAST IMPORTANT — The giver's context:
+4. LEAST IMPORTANT — The giver's context. Use this only after recipient and occasion fit are satisfied:
    ${giverLines.length ? giverLines.join('\n   ') : 'No giver profile.'}
 
 Budget: $${budget || 50}. Vary price points within budget.
