@@ -1,20 +1,27 @@
 import { useState } from 'react';
-import { Heart, X, Star, Lightbulb, Send, CheckCircle2 } from 'lucide-react';
+import { Heart, X, Star, Lightbulb, Send } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 
 export default function FeedbackCard({ user }) {
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem('feedback_dismissed') === 'true');
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('feedback_dismissed') === 'true');
   const [mode, setMode] = useState(null); // null | 'review' | 'suggestion'
   const [text, setText] = useState('');
   const [rating, setRating] = useState(0);
   const [hovered, setHovered] = useState(0);
   const [sending, setSending] = useState(false);
-  const [done, setDone] = useState(false);
 
-  const dismiss = () => {
-    localStorage.setItem('feedback_dismissed', 'true');
-    setDismissed(true);
+  const resetForm = () => {
+    setMode(null);
+    setText('');
+    setRating(0);
+    setHovered(0);
+  };
+
+  const collapse = () => {
+    localStorage.removeItem('feedback_dismissed');
+    resetForm();
+    setCollapsed(true);
   };
 
   const handleSend = async () => {
@@ -33,8 +40,9 @@ export default function FeedbackCard({ user }) {
         body,
         reply_to: user?.email,
       });
-      setDone(true);
       toast.success(mode === 'review' ? 'Thank you so much! 💛' : 'Idea sent! We love hearing from you 💛');
+      resetForm();
+      setCollapsed(true);
     } catch (err) {
       toast.error(err?.message || 'Could not send that just now.');
     } finally {
@@ -42,7 +50,26 @@ export default function FeedbackCard({ user }) {
     }
   };
 
-  if (dismissed) return null;
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsed(false)}
+        className="w-full bg-card border border-border rounded-2xl p-4 flex items-center justify-between gap-3 text-left hover:border-terracotta/40 hover:bg-terracotta/5 transition-all"
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-terracotta/10 flex items-center justify-center flex-shrink-0">
+            <Heart className="w-4 h-4 text-terracotta" />
+          </div>
+          <div>
+            <p className="font-heading font-semibold text-foreground text-sm">We'd love your thoughts</p>
+            <p className="text-xs text-muted-foreground">Leave a review or share an idea</p>
+          </div>
+        </div>
+        <span className="text-xs font-heading font-semibold text-terracotta flex-shrink-0">Open</span>
+      </button>
+    );
+  }
 
   return (
     <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
@@ -58,20 +85,14 @@ export default function FeedbackCard({ user }) {
           </div>
         </div>
         <button
-          onClick={dismiss}
+          onClick={collapse}
           className="p-1.5 rounded-full hover:bg-muted transition-all text-muted-foreground hover:text-foreground flex-shrink-0"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
 
-      {done ? (
-        <div className="text-center py-4">
-          <CheckCircle2 className="w-8 h-8 text-moss mx-auto mb-2" />
-          <p className="font-heading font-semibold text-foreground text-sm">Got it — thank you! 💛</p>
-          <p className="text-xs text-muted-foreground mt-1">We read every single message.</p>
-        </div>
-      ) : mode === null ? (
+      {mode === null ? (
         <>
           <p className="text-sm text-muted-foreground leading-relaxed">
             You're one of the people who makes How Thoughtful better. Whether it's a kind word or a brilliant idea — we're genuinely all ears. 🙏
@@ -98,7 +119,7 @@ export default function FeedbackCard({ user }) {
       ) : (
         <div className="space-y-3">
           <button
-            onClick={() => { setMode(null); setText(''); setRating(0); }}
+            onClick={resetForm}
             className="text-xs text-muted-foreground hover:text-foreground transition-all"
           >
             ← Back
