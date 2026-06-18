@@ -241,16 +241,8 @@ CRUCIAL: at least ONE idea MUST be free ($0) — a personal act, skill, or gift 
         }
       }
 
-      if (user?.email) {
-        const profiles = await base44.entities.UserProfile.filter({ created_by: user?.email });
-        if (profiles[0]) {
-          await base44.entities.UserProfile.update(profiles[0].id, {
-            monthly_ai_uses: newUses,
-            monthly_ai_reset_month: currentMonth,
-          });
-          queryClient.invalidateQueries({ queryKey: ['userProfile'] });
-        }
-      }
+      // The Edge Function records usage atomically. This refresh is display-only.
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
     } catch (err) {
       toast.error(err?.message || 'Something went wrong. Try again.');
     }

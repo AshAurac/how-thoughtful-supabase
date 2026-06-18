@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { supabase } from '@/api/supabaseClient';
 import { Gift, ExternalLink, Heart } from 'lucide-react';
 
 const PRIORITY_LABEL = { low: 'Nice to have', medium: 'Would love it', high: 'Really wants this' };
@@ -31,8 +32,9 @@ export default function PublicWishlist() {
   const { data: wishlist, isLoading } = useQuery({
     queryKey: ['publicWishlist', token],
     queryFn: async () => {
-      const lists = await base44.entities.Wishlist.filter({ share_token: token, is_public: true });
-      return lists[0] || null;
+      const { data, error } = await supabase.rpc('get_public_wishlist', { p_token: token });
+      if (error) throw error;
+      return data?.[0] || null;
     },
   });
 
