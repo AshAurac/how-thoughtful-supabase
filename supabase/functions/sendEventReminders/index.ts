@@ -127,7 +127,12 @@ async function sendEmail(to: string, subject: string, text: string) {
 
 serve(async (req) => {
   try {
-    if (REMINDER_CRON_SECRET && req.headers.get('x-cron-secret') !== REMINDER_CRON_SECRET) {
+    if (!REMINDER_CRON_SECRET) {
+      console.error('REMINDER_CRON_SECRET is not configured');
+      return json({ error: 'Reminder authentication is not configured' }, 503);
+    }
+
+    if (req.headers.get('x-cron-secret') !== REMINDER_CRON_SECRET) {
       return json({ error: 'Unauthorized' }, 401);
     }
 

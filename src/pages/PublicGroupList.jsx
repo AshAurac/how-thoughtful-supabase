@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { supabase } from '@/api/supabaseClient';
 import { toast } from 'sonner';
 import { Gift, Check, ExternalLink } from 'lucide-react';
 
@@ -31,23 +32,33 @@ export default function PublicGroupList() {
   const { data: list, isLoading } = useQuery({
     queryKey: ['publicGroupList', token],
     queryFn: async () => {
-      const results = await base44.entities.SharedList.filter({ share_token: token });
-      return results[0] || null;
+      const { data, error } = await supabase.rpc('get_public_shared_list', { p_token: token });
+      if (error) throw error;
+      return data?.[0] || null;
     },
   });
 
   const { data: items = [] } = useQuery({
     queryKey: ['publicGroupItems', list?.id],
-    queryFn: () => base44.entities.SharedListItem.filter({ list_id: list.id }),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_public_shared_list_items', { p_token: token });
+      if (error) throw error;
+      return data || [];
+    },
     enabled: !!list?.id,
   });
 
   const claimMutation = useMutation({
-    mutationFn: ({ itemId, name, email }) => base44.entities.SharedListItem.update(itemId, {
-      is_claimed: true,
-      claimed_by_name: name,
-      claimed_by_email: email,
-    }),
+    mutationFn: async ({ itemId, name, email }) => {
+      const { data, error } = await supabase.rpc('claim_public_shared_list_item', {
+        p_token: token,
+        p_item_id: itemId,
+        p_name: name,
+        p_email: email,
+      });
+      if (error) throw error;
+      localStorage.setItem(`shared-list-claim:${itemId}`, data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['publicGroupItems', list?.id] });
       setClaimingId(null);
@@ -58,11 +69,18 @@ export default function PublicGroupList() {
   });
 
   const unclaimMutation = useMutation({
-    mutationFn: ({ itemId }) => base44.entities.SharedListItem.update(itemId, {
-      is_claimed: false,
-      claimed_by_name: '',
-      claimed_by_email: '',
-    }),
+    mutationFn: async ({ itemId }) => {
+      const claimSecret = localStorage.getItem(`shared-list-claim:${itemId}`);
+      if (!claimSecret) throw new Error('This item can only be unclaimed from the browser that claimed it.');
+      const { data, error } = await supabase.rpc('unclaim_public_shared_list_item', {
+        p_token: token,
+        p_item_id: itemId,
+        p_claim_secret: claimSecret,
+      });
+      if (error) throw error;
+      if (!data) throw new Error('The claim could not be verified.');
+      localStorage.removeItem(`shared-list-claim:${itemId}`);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['publicGroupItems', list?.id] });
       toast.success('Item unclaimed');
@@ -165,14 +183,10 @@ export default function PublicGroupList() {
                     </span>
                     {/* Allow unclaiming if you're the one who claimed it */}
                     <button
-                      onClick={() => {
-                        const myEmail = prompt('Enter your email to unclaim:');
-                        if (myEmail?.toLowerCase().trim() === item.claimed_by_email?.toLowerCase().trim()) {
-                          unclaimMutation.mutate({ itemId: item.id });
-                        } else {
-                          toast.error("That email doesn't match who claimed it.");
-                        }
-                      }}
+                      onClick={() => unclaimMutation.mutate(
+                        { itemId: item.id },
+                        { onError: error => toast.error(error.message) }
+                      )}
                       className="text-xs text-ink-soft hover:text-terracotta transition-colors"
                     >
                       Not buying it? Unclaim

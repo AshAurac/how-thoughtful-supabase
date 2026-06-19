@@ -1,24 +1,20 @@
 import { serve } from 'https://deno.land/std@0.203.0/http/server.ts';
-import { createClient } from 'npm:@supabase/supabase-js';
+import {
+  authenticateRequest,
+  consumeRateLimit,
+  corsHeaders,
+  createAdminClient,
+  createUserClient,
+  errorResponse,
+  isValidEmail,
+  json,
+  readBoundedJson,
+} from '../_shared/security.ts';
 
-const SUPABASE_URL = Deno.env.get('VITE_SUPABASE_URL') || Deno.env.get('SUPABASE_URL');
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const APP_URL = Deno.env.get('VITE_APP_URL') || Deno.env.get('APP_URL') || 'https://your-app-url.com';
 const EMAIL_FROM = Deno.env.get('EMAIL_FROM') || 'How Thoughtful <hello@send.howthoughtful.app>';
 const REPLY_TO_EMAIL = Deno.env.get('REPLY_TO_EMAIL') || 'hello@howthoughtful.app';
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-  console.error('Missing Supabase env vars');
-}
-
-const supabaseAdmin = createClient(SUPABASE_URL || '', SUPABASE_SERVICE_KEY || '');
-
-async function readJsonBody(req: Request) {
-  const raw = await req.text();
-  if (!raw.trim()) return {};
-  return JSON.parse(raw);
-}
 
 async function sendEmail(to: string, subject: string, body: string) {
   if (!RESEND_API_KEY) {
@@ -43,20 +39,42 @@ async function sendEmail(to: string, subject: string, body: string) {
 }
 
 serve(async (req) => {
-  try {
-    const { event_id, invite_email } = await readJsonBody(req);
-    if (!event_id || !invite_email) return new Response(JSON.stringify({ error: 'Missing event_id or invite_email' }), { status: 400 });
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-    // Find the event
-    const { data: events } = await supabaseAdmin.from('events').select('*').eq('id', event_id).limit(1);
-    const event = events?.[0];
-    if (!event) return new Response(JSON.stringify({ error: 'Event not found' }), { status: 404 });
+  try {
+    const admin = createAdminClient();
+    const user = await authenticateRequest(req, admin);
+    if (!await consumeRateLimit(admin, `event-invite:${user.id}`, 10, 3600)) {
+      return json({ error: 'Invite rate limit exceeded.' }, 429);
+    }
+
+    const { event_id, invite_email } = await readBoundedJson(req, 4_096);
+    if (typeof event_id !== 'string' || !/^[0-9a-f-]{36}$/i.test(event_id) || !isValidEmail(invite_email)) {
+      return json({ error: 'A valid event_id and invite_email are required.' }, 400);
+    }
+
+    // Query through the caller's JWT and require owner identity before using service role.
+    const userClient = createUserClient(req);
+    const { data: event, error: eventError } = await userClient
+      .from('events')
+      .select('id,recipient_name,occasion,invite_token,created_by')
+      .eq('id', event_id)
+      .eq('created_by', user.email)
+      .maybeSingle();
+    if (eventError) throw eventError;
+    if (!event) return json({ error: 'Event not found or access denied' }, 404);
 
     // Ensure invite token
     let token = event.invite_token;
     if (!token) {
       token = crypto.randomUUID();
-      await supabaseAdmin.from('events').update({ invite_token: token }).eq('id', event_id);
+      const { error } = await admin
+        .from('events')
+        .update({ invite_token: token })
+        .eq('id', event_id)
+        .eq('created_by', user.email);
+      if (error) throw error;
     }
 
     const inviteUrl = `${APP_URL.replace(/\/$/, '')}/join-event/${token}`;
@@ -66,9 +84,8 @@ serve(async (req) => {
 
     await sendEmail(invite_email, subject, body);
 
-    return new Response(JSON.stringify({ success: true }));
+    return json({ success: true });
   } catch (err) {
-    console.error('sendEventInvite error', err);
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    return errorResponse(err);
   }
 });

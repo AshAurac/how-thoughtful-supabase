@@ -1,20 +1,20 @@
 import { serve } from 'https://deno.land/std@0.203.0/http/server.ts';
-import { createClient } from 'npm:@supabase/supabase-js';
+import {
+  authenticateRequest,
+  consumeRateLimit,
+  corsHeaders,
+  createAdminClient,
+  createUserClient,
+  errorResponse,
+  isValidEmail,
+  json,
+  readBoundedJson,
+} from '../_shared/security.ts';
 
-const SUPABASE_URL = Deno.env.get('VITE_SUPABASE_URL') || Deno.env.get('SUPABASE_URL');
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const APP_URL = (Deno.env.get('VITE_APP_URL') || Deno.env.get('APP_URL') || 'https://howthoughtful.app').replace(/\/$/, '');
 const EMAIL_FROM = Deno.env.get('EMAIL_FROM') || 'How Thoughtful <hello@send.howthoughtful.app>';
 const REPLY_TO_EMAIL = Deno.env.get('REPLY_TO_EMAIL') || 'hello@howthoughtful.app';
-
-const supabaseAdmin = createClient(SUPABASE_URL || '', SUPABASE_SERVICE_KEY || '');
-
-async function readJsonBody(req: Request) {
-  const raw = await req.text();
-  if (!raw.trim()) return {};
-  return JSON.parse(raw);
-}
 
 async function sendEmail(to: string, subject: string, body: string) {
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY is not configured');
@@ -34,32 +34,65 @@ async function sendEmail(to: string, subject: string, body: string) {
 }
 
 serve(async (req) => {
-  try {
-    const { listId } = await readJsonBody(req);
-    if (!listId) return new Response(JSON.stringify({ error: 'listId required' }), { status: 400 });
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-    const { data: lists } = await supabaseAdmin.from('shared_lists').select('*').eq('id', listId).limit(1);
-    const list = lists?.[0];
-    if (!list) return new Response(JSON.stringify({ error: 'List not found' }), { status: 404 });
+  try {
+    const admin = createAdminClient();
+    const user = await authenticateRequest(req, admin);
+    if (!await consumeRateLimit(admin, `secret-santa:${user.id}`, 3, 86_400)) {
+      return json({ error: 'Secret Santa rate limit exceeded.' }, 429);
+    }
+
+    const { listId } = await readBoundedJson(req, 2_048);
+    if (typeof listId !== 'string' || !/^[0-9a-f-]{36}$/i.test(listId)) {
+      return json({ error: 'A valid listId is required.' }, 400);
+    }
+
+    const userClient = createUserClient(req);
+    const { data: list, error: listError } = await userClient
+      .from('shared_lists')
+      .select('id,title,members,santa_assigned,created_by')
+      .eq('id', listId)
+      .eq('created_by', user.email)
+      .maybeSingle();
+    if (listError) throw listError;
+    if (!list) return json({ error: 'List not found or access denied' }, 404);
+    if (list.santa_assigned) return json({ error: 'Secret Santa has already been assigned.' }, 409);
 
     const members = list.members || [];
-    if (members.length < 2) return new Response(JSON.stringify({ error: 'Need at least 2 participants' }), { status: 400 });
+    if (!Array.isArray(members) || members.length < 2 || members.length > 50) {
+      return json({ error: 'Secret Santa requires between 2 and 50 participants.' }, 400);
+    }
+    const normalizedMembers = members.map((member: any) => ({
+      name: typeof member?.name === 'string' ? member.name.trim().slice(0, 100) : '',
+      email: typeof member?.email === 'string' ? member.email.trim().toLowerCase() : '',
+    }));
+    const emails = normalizedMembers.map(member => member.email);
+    if (normalizedMembers.some(member => !member.name || !isValidEmail(member.email))
+      || new Set(emails).size !== emails.length) {
+      return json({ error: 'Participants must have unique, valid names and email addresses.' }, 400);
+    }
 
-    // Shuffle
-    let givers = [...members];
-    let receivers = [...members];
-    for (let i = receivers.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [receivers[i], receivers[j]] = [receivers[j], receivers[i]];
+    // Claim the one-time transition before sending. Owners must explicitly reset to redraw.
+    const { data: locked, error: lockError } = await admin
+      .from('shared_lists')
+      .update({ santa_assigned: true })
+      .eq('id', listId)
+      .eq('created_by', user.email)
+      .eq('santa_assigned', false)
+      .select('id')
+      .maybeSingle();
+    if (lockError) throw lockError;
+    if (!locked) return json({ error: 'Secret Santa has already been assigned.' }, 409);
+
+    const givers = [...normalizedMembers];
+    for (let i = givers.length - 1; i > 0; i--) {
+      const random = crypto.getRandomValues(new Uint32Array(1))[0];
+      const j = random % (i + 1);
+      [givers[i], givers[j]] = [givers[j], givers[i]];
     }
-    let attempts = 0;
-    while (givers.some((g, i) => g.email === receivers[i].email) && attempts < 10) {
-      for (let i = receivers.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [receivers[i], receivers[j]] = [receivers[j], receivers[i]];
-      }
-      attempts++;
-    }
+    const receivers = [...givers.slice(1), givers[0]];
 
     // Email each giver their match
     const promises = givers.map((giver, i) => {
@@ -70,12 +103,8 @@ serve(async (req) => {
     });
     await Promise.all(promises);
 
-    // mark assigned
-    await supabaseAdmin.from('shared_lists').update({ santa_assigned: true }).eq('id', listId);
-
-    return new Response(JSON.stringify({ success: true }));
+    return json({ success: true, count: givers.length });
   } catch (err) {
-    console.error('assignSecretSanta error', err);
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    return errorResponse(err);
   }
 });
