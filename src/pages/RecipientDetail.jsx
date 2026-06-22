@@ -8,10 +8,13 @@ import { formatEventDate } from '@/lib/dateUtils';
 import { LOVE_LANGUAGES } from '@/lib/catalogs';
 import NativePicker from '@/components/NativePicker';
 import { syncBirthdayEventForRecipient } from '@/lib/birthdayOccasions';
+import { ageForRecipient, normalizeRecipientAgeFields, syncRecipientAgeForm } from '@/lib/recipientAge';
+import { visibleActiveEvents } from '@/lib/eventVisibility';
 
 const emptyForm = {
   name: '',
   age: '',
+  birth_year: '',
   birthday_month: '',
   birthday_day: '',
   relationship: '',
@@ -51,6 +54,7 @@ export default function RecipientDetail() {
     setForm({
       name: recipient.name || '',
       age: recipient.age || '',
+      birth_year: recipient.birth_year || '',
       birthday_month: recipient.birthday_month || '',
       birthday_day: recipient.birthday_day || '',
       relationship: recipient.relationship || '',
@@ -74,7 +78,8 @@ export default function RecipientDetail() {
     queryFn: () => base44.entities.Gift.list(),
   });
 
-  const recipientEvents = events.filter(e => e.recipient_id === id || e.recipient_name === recipient?.name);
+  const recipientEvents = visibleActiveEvents(events)
+    .filter(e => e.recipient_id === id || e.recipient_name === recipient?.name);
   const eventIds = new Set(recipientEvents.map(e => e.id));
   const recipientGifts = gifts.filter(g => eventIds.has(g.event_id));
   const totalSpent = recipientGifts.reduce((s, g) => s + (g.price || 0), 0);
@@ -82,11 +87,13 @@ export default function RecipientDetail() {
 
   const updateMutation = useMutation({
     mutationFn: async () => {
+      const ageFields = normalizeRecipientAgeFields(form);
       const updatedRecipient = await base44.entities.Recipient.update(id, {
         name: form.name.trim(),
-        age: form.age ? parseInt(form.age) : null,
-        birthday_month: form.birthday_month ? parseInt(form.birthday_month) : null,
-        birthday_day: form.birthday_day ? parseInt(form.birthday_day) : null,
+        age: ageFields.age ?? null,
+        birth_year: ageFields.birth_year ?? null,
+        birthday_month: ageFields.birthday_month ?? null,
+        birthday_day: ageFields.birthday_day ?? null,
         relationship: form.relationship.trim(),
         love_language: form.love_language,
         interests: form.interests ? form.interests.split(',').map(s => s.trim()).filter(Boolean) : [],
@@ -174,6 +181,7 @@ export default function RecipientDetail() {
             <button type="button" onClick={() => { setEditing(false); setForm({
               name: recipient.name || '',
               age: recipient.age || '',
+              birth_year: recipient.birth_year || '',
               birthday_month: recipient.birthday_month || '',
               birthday_day: recipient.birthday_day || '',
               relationship: recipient.relationship || '',
@@ -198,18 +206,19 @@ export default function RecipientDetail() {
             <input
               type="number"
               value={form.age}
-              onChange={e => setForm(f => ({ ...f, age: e.target.value }))}
+              onChange={e => setForm(f => syncRecipientAgeForm(f, { age: e.target.value }))}
               placeholder="Age"
+              disabled={Boolean(form.birth_year)}
               className="border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <input
               type="number"
               min="1"
               max="12"
               value={form.birthday_month}
-              onChange={e => setForm(f => ({ ...f, birthday_month: e.target.value }))}
+              onChange={e => setForm(f => syncRecipientAgeForm(f, { birthday_month: e.target.value }))}
               placeholder="Birthday month"
               className="border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
             />
@@ -218,8 +227,17 @@ export default function RecipientDetail() {
               min="1"
               max="31"
               value={form.birthday_day}
-              onChange={e => setForm(f => ({ ...f, birthday_day: e.target.value }))}
+              onChange={e => setForm(f => syncRecipientAgeForm(f, { birthday_day: e.target.value }))}
               placeholder="Birthday day"
+              className="border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
+            />
+            <input
+              type="number"
+              min="1800"
+              max={new Date().getFullYear()}
+              value={form.birth_year}
+              onChange={e => setForm(f => syncRecipientAgeForm(f, { birth_year: e.target.value }))}
+              placeholder="Birth year"
               className="border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
             />
           </div>
@@ -331,11 +349,11 @@ export default function RecipientDetail() {
               </span>
             </div>
           )}
-          {recipient.age && (
+          {ageForRecipient(recipient) !== null && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Age:</span>
               <span className="text-xs bg-card border border-border px-2.5 py-1 rounded-full text-foreground">
-                {recipient.age}
+                {ageForRecipient(recipient)}
               </span>
             </div>
           )}

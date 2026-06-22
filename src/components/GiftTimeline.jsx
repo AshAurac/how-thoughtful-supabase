@@ -1,12 +1,10 @@
-import { useState } from 'react';
-
 const MILESTONES = [
-  { days: 30, label: 'Plan', emoji: '📋' },
-  { days: 20, label: 'Order online', emoji: '🛒' },
-  { days: 7,  label: 'Buy in store', emoji: '🏪' },
-  { days: 3,  label: 'Wrap & card', emoji: '🎁' },
-  { days: 1,  label: 'Final touch', emoji: '✨' },
-  { days: 0,  label: 'Give!', emoji: '🎉' },
+  { id: 'plan', days: 30, label: 'Plan', emoji: '📋' },
+  { id: 'order_online', days: 20, label: 'Order online', emoji: '🛒' },
+  { id: 'buy_local', days: 7,  label: 'Buy in store', emoji: '🏪' },
+  { id: 'wrap_card', days: 3,  label: 'Wrap & card', emoji: '🎁' },
+  { id: 'final_touch', days: 1,  label: 'Final touch', emoji: '✨' },
+  { id: 'give', days: 0,  label: 'Give!', emoji: '🎉' },
 ];
 
 function getAutoStep(daysLeft) {
@@ -19,29 +17,21 @@ function getAutoStep(daysLeft) {
   return -1;
 }
 
-export default function GiftTimeline({ daysLeft, onAllDone }) {
+export default function GiftTimeline({ daysLeft, completed = [], onChange, onAllDone }) {
   const autoStep = getAutoStep(daysLeft);
-  // Manual ticks: user can tick any step regardless of days
-  const [ticked, setTicked] = useState(() => {
-    // Pre-tick all steps that are auto-completed
-    const t = new Set();
-    for (let i = 0; i < autoStep; i++) t.add(i);
-    return t;
-  });
+  const ticked = new Set(completed);
 
-  const toggleTick = (i) => {
-    setTicked(prev => {
-      const next = new Set(prev);
-      if (next.has(i)) next.delete(i);
-      else next.add(i);
-      const nowAllDone = next.size === MILESTONES.length;
-      if (nowAllDone) onAllDone?.();
-      return next;
-    });
+  const toggleTick = (milestone) => {
+    const next = new Set(ticked);
+    if (next.has(milestone.id)) next.delete(milestone.id);
+    else next.add(milestone.id);
+    const values = [...next];
+    onChange?.(values);
+    if (values.length === MILESTONES.length) onAllDone?.();
   };
 
   // Highest contiguous completed step for progress bar
-  const highestDone = MILESTONES.reduce((acc, _, i) => ticked.has(i) ? i : acc, -1);
+  const highestDone = MILESTONES.reduce((acc, milestone, i) => ticked.has(milestone.id) ? i : acc, -1);
   const progressPct = highestDone < 0 ? 0 : ((highestDone + 1) / MILESTONES.length) * 100;
   const allDone = ticked.size === MILESTONES.length;
 
@@ -67,13 +57,13 @@ export default function GiftTimeline({ daysLeft, onAllDone }) {
       {/* Milestone dots — tappable */}
       <div className="flex items-start justify-between">
         {MILESTONES.map((m, i) => {
-          const done = ticked.has(i);
-          const isActive = !done && i === autoStep && !ticked.has(i);
+          const done = ticked.has(m.id);
+          const isActive = !done && i === autoStep;
           return (
             <button
-              key={m.days}
+              key={m.id}
               type="button"
-              onClick={() => toggleTick(i)}
+              onClick={() => toggleTick(m)}
               className="flex flex-col items-center gap-1 focus:outline-none"
               style={{ flex: 1 }}
             >

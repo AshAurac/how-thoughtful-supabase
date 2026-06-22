@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { parseISO, isValid, format } from 'date-fns';
 import PriorityBadge from '@/components/PriorityBadge';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { visibleActiveEvents } from '@/lib/eventVisibility';
 
 const SEASONS = [
   { name: 'Spring', months: [3, 4, 5], color: 'bg-moss/20 text-moss-dark border-moss/30' },
@@ -26,7 +27,7 @@ export default function SeasonPage({ user }) {
   });
 
   const getSeasonEvents = (months) =>
-    events.filter(e => {
+    visibleActiveEvents(events).filter(e => {
       const d = parseISO(e.event_date);
       return isValid(d) && months.includes(d.getMonth() + 1);
     });

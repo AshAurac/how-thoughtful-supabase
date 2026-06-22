@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { format, parseISO, isValid } from 'date-fns';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { daysUntil } from '@/lib/dateUtils';
+import { visibleActiveEvents } from '@/lib/eventVisibility';
 
 export default function BudgetPage({ user }) {
   const queryClient = useQueryClient();
@@ -25,7 +26,8 @@ export default function BudgetPage({ user }) {
     enabled: !!user?.email,
   });
 
-  const totalBudget = events.reduce((s, e) => s + (e.budget || 0), 0);
+  const activeEvents = visibleActiveEvents(events);
+  const totalBudget = activeEvents.reduce((s, e) => s + (e.budget || 0), 0);
   const totalSpent = gifts.reduce((s, g) => s + (g.price || 0) + (g.shipping_cost || 0), 0);
   const remaining = Math.max(0, totalBudget - totalSpent);
 
@@ -40,7 +42,7 @@ export default function BudgetPage({ user }) {
   const monthlyData = Object.entries(monthlyMap).map(([month, amount]) => ({ month, amount }));
 
   // Upcoming 30 days spend
-  const upcoming30 = events
+  const upcoming30 = activeEvents
     .filter(e => {
       const days = daysUntil(e.event_date);
       if (days === null) return false;

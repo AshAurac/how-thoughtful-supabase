@@ -68,14 +68,19 @@ const CHECKLISTS = {
   ],
 };
 
-export default function EventChecklist({ occasion }) {
-  const [checked, setChecked] = useState({});
+export default function EventChecklist({ occasion, completed = [], onChange }) {
   const [expanded, setExpanded] = useState(false);
 
   const items = CHECKLISTS[occasion] || CHECKLISTS.other;
-  const doneCount = Object.values(checked).filter(Boolean).length;
+  const checked = new Set(completed);
+  const doneCount = items.filter(item => checked.has(item.id)).length;
 
-  const toggle = (id) => setChecked(prev => ({ ...prev, [id]: !prev[id] }));
+  const toggle = (id) => {
+    const next = new Set(checked);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange?.([...next]);
+  };
 
   return (
     <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -106,14 +111,14 @@ export default function EventChecklist({ occasion }) {
               key={item.id}
               onClick={() => toggle(item.id)}
               className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all ${
-                checked[item.id] ? 'bg-moss/10' : 'bg-muted hover:bg-secondary'
+                checked.has(item.id) ? 'bg-moss/10' : 'bg-muted hover:bg-secondary'
               }`}
             >
-              {checked[item.id]
+              {checked.has(item.id)
                 ? <CheckCircle2 className="w-5 h-5 text-moss flex-shrink-0" />
                 : <Circle className="w-5 h-5 text-muted-foreground flex-shrink-0" />
               }
-              <span className={`text-sm ${checked[item.id] ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+              <span className={`text-sm ${checked.has(item.id) ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                 {item.label}
               </span>
             </button>

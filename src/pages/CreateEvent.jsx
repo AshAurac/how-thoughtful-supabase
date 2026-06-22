@@ -9,6 +9,7 @@ import { LOVE_LANGUAGES } from '@/lib/catalogs';
 import NativePicker from '@/components/NativePicker';
 import { findRecipientMatch } from '@/lib/recipientMatching';
 import { nextBirthdayDate } from '@/lib/birthdayOccasions';
+import { calculateCurrentAge, deriveBirthYearFromTurningAge, turningAgeOnDate } from '@/lib/recipientAge';
 
 const OCCASIONS = ['birthday','anniversary','holiday','graduation','baby_shower','wedding','housewarming','thank_you','just_because','other'];
 const PRIORITIES = ['free','low','medium','high'];
@@ -37,7 +38,13 @@ function recipientUpdatesFromEvent(data, { includeExtraDetails = false } = {}) {
       updates.birthday_month = month;
       updates.birthday_day = day;
     }
-    if (data.age_or_years) updates.age = data.age_or_years;
+    if (data.age_or_years) {
+      const birthYear = deriveBirthYearFromTurningAge(data.age_or_years, data.event_date);
+      if (birthYear) {
+        updates.birth_year = birthYear;
+        updates.age = calculateCurrentAge(birthYear, month, day);
+      }
+    }
   }
 
   if (data.love_language) updates.love_language = data.love_language;
@@ -74,7 +81,9 @@ function eventFormDefaultsFromRecipient(recipient, occasion, form) {
   if (occasion === 'birthday') {
     const birthdayDate = nextBirthdayDate(recipient.birthday_month, recipient.birthday_day);
     if (birthdayDate && !form.event_date) defaults.event_date = birthdayDate;
-    if (recipient.age && !form.age_or_years) defaults.age_or_years = String(recipient.age);
+    const turningAge = turningAgeOnDate(recipient.birth_year, birthdayDate);
+    if (turningAge !== null && !form.age_or_years) defaults.age_or_years = String(turningAge);
+    else if (recipient.age && !form.age_or_years) defaults.age_or_years = String(recipient.age);
   }
   if (recipient.love_language && !form.love_language) defaults.love_language = recipient.love_language;
   if (recipient.notes && !form.notes) defaults.notes = recipient.notes;

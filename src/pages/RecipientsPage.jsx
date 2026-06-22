@@ -10,6 +10,7 @@ import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import BulkImportRecipients from '@/components/BulkImportRecipients';
 import { findRecipientMatch, mergeRecipientPayload, recipientPayloadFromForm } from '@/lib/recipientMatching';
 import { syncBirthdayEventForRecipient } from '@/lib/birthdayOccasions';
+import { ageForRecipient, syncRecipientAgeForm } from '@/lib/recipientAge';
 
 export default function RecipientsPage({ user }) {
   const queryClient = useQueryClient();
@@ -19,6 +20,7 @@ export default function RecipientsPage({ user }) {
   const [form, setForm] = useState({
     name: '',
     age: '',
+    birth_year: '',
     birthday_month: '',
     birthday_day: '',
     relationship: '',
@@ -32,7 +34,7 @@ export default function RecipientsPage({ user }) {
   });
 
   const updateForm = (updates) => {
-    setForm(f => ({ ...f, ...updates }));
+    setForm(f => syncRecipientAgeForm(f, updates));
     setDuplicateMatch(null);
   };
 
@@ -53,7 +55,7 @@ export default function RecipientsPage({ user }) {
   });
 
   const resetForm = () => {
-    setForm({ name: '', age: '', birthday_month: '', birthday_day: '', relationship: '', love_language: '', interests: '', notes: '', style_preferences: '', gift_likes: '', gift_avoidances: '', wishlist_notes: '' });
+    setForm({ name: '', age: '', birth_year: '', birthday_month: '', birthday_day: '', relationship: '', love_language: '', interests: '', notes: '', style_preferences: '', gift_likes: '', gift_avoidances: '', wishlist_notes: '' });
     setDuplicateMatch(null);
   };
 
@@ -163,10 +165,11 @@ export default function RecipientsPage({ user }) {
               value={form.age}
               onChange={e => updateForm({ age: e.target.value })}
               placeholder="Age"
+              disabled={Boolean(form.birth_year)}
               className="border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <input
               type="number"
               min="1"
@@ -183,6 +186,15 @@ export default function RecipientsPage({ user }) {
               value={form.birthday_day}
               onChange={e => updateForm({ birthday_day: e.target.value })}
               placeholder="Birthday day"
+              className="border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
+            />
+            <input
+              type="number"
+              min="1800"
+              max={new Date().getFullYear()}
+              value={form.birth_year}
+              onChange={e => updateForm({ birth_year: e.target.value })}
+              placeholder="Birth year"
               className="border border-border rounded-xl px-3 py-2 text-sm bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50"
             />
           </div>
@@ -323,9 +335,9 @@ export default function RecipientsPage({ user }) {
                 )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {r.age && (
+                {ageForRecipient(r) !== null && (
                   <span className="text-xs bg-secondary text-muted-foreground px-2.5 py-1 rounded-full">
-                    age {r.age}
+                    age {ageForRecipient(r)}
                   </span>
                 )}
                 {r.love_language && (

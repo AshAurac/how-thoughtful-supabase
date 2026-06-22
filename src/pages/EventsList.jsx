@@ -7,6 +7,7 @@ import { Plus, Upload, Users } from 'lucide-react';
 import { daysUntil, urgencyColor, formatEventDate, relativeDayLabel } from '@/lib/dateUtils';
 import PriorityBadge from '@/components/PriorityBadge';
 import BulkImportEvents from '@/components/BulkImportEvents';
+import { visibleActiveEvents } from '@/lib/eventVisibility';
 
 export default function EventsList({ user }) {
   const queryClient = useQueryClient();
@@ -30,8 +31,7 @@ export default function EventsList({ user }) {
 
   const isLoading = false;
   const ownIds = new Set(ownEvents.map(e => e.id));
-  const events = [...ownEvents, ...sharedEvents.filter(e => !ownIds.has(e.id))]
-    .filter(e => !e.completed)
+  const events = visibleActiveEvents([...ownEvents, ...sharedEvents.filter(e => !ownIds.has(e.id))])
     .sort((a, b) => a.event_date.localeCompare(b.event_date));
 
   return (

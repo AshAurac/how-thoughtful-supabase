@@ -9,6 +9,7 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
+    "test": "node --test src/lib/*.test.js",
     "preview": "vite preview",
     "deploy": "npx vercel --prod",
     "deploy:confirm": "node scripts/deploy-confirm.mjs"

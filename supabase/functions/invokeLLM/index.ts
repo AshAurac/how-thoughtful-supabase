@@ -52,17 +52,38 @@ serve(async (req) => {
   }
 
   let admin;
+  let userId = '';
   let userEmail = '';
-  let quotaReserved = false;
+  let quotaReservation: { scope: string; month: string } | null = null;
+  let recipientId = '';
   try {
     admin = createAdminClient();
     const user = await authenticateRequest(req, admin);
+    userId = user.id;
     userEmail = user.email || '';
+
+    const payload = await readBoundedJson(req);
+    recipientId = typeof payload.recipient_id === 'string' ? payload.recipient_id : '';
+    if (!/^[0-9a-f-]{36}$/i.test(recipientId)) {
+      return json({ error: 'A saved recipient is required.' }, 400);
+    }
+
+    if (payload.action === 'status') {
+      const { data: allowance, error: allowanceError } = await admin.rpc('get_ai_allowance', {
+        p_user_id: user.id,
+        p_user_email: userEmail,
+        p_recipient_id: recipientId,
+      });
+      if (allowanceError) {
+        return json({ error: allowanceError.message }, allowanceError.code === '42501' ? 403 : 400);
+      }
+      return json({ allowance });
+    }
+
     if (!await consumeRateLimit(admin, `ai:${user.id}`, 10, 60)) {
       return json({ error: 'Too many AI requests. Please try again shortly.' }, 429);
     }
 
-    const payload = await readBoundedJson(req);
     const prompt = typeof payload.prompt === 'string' ? payload.prompt.trim() : '';
     if (!prompt || prompt.length > 4_000) {
       return json({ error: 'Prompt must be between 1 and 4000 characters.' }, 400);
@@ -90,13 +111,15 @@ serve(async (req) => {
     }
 
     const { data: usage, error: quotaError } = await admin.rpc('consume_ai_quota', {
+      p_user_id: user.id,
       p_user_email: userEmail,
+      p_recipient_id: recipientId,
     });
     if (quotaError) {
-      const status = quotaError.code === 'P0001' ? 429 : 400;
+      const status = quotaError.code === 'P0001' ? 429 : quotaError.code === '42501' ? 403 : 400;
       return json({ error: quotaError.message }, status);
     }
-    quotaReserved = true;
+    quotaReservation = { scope: usage.scope, month: usage.month };
 
     const resp = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
@@ -112,8 +135,14 @@ serve(async (req) => {
     });
     const data = await resp.json();
     if (!resp.ok) {
-      await admin.rpc('refund_ai_quota', { p_user_email: userEmail });
-      quotaReserved = false;
+      await admin.rpc('refund_ai_quota', {
+        p_user_id: user.id,
+        p_user_email: userEmail,
+        p_recipient_id: recipientId,
+        p_scope: quotaReservation.scope,
+        p_month: quotaReservation.month,
+      });
+      quotaReservation = null;
       return json({
         error: data?.error?.message || `${isNvidia ? 'NVIDIA' : 'OpenAI'} request failed`
       }, resp.status);
@@ -122,8 +151,14 @@ serve(async (req) => {
     const content = data?.choices?.[0]?.message?.content || '{}';
     return json({ ...parseJsonContent(content), usage });
   } catch (err) {
-    if (quotaReserved && admin && userEmail) {
-      await admin.rpc('refund_ai_quota', { p_user_email: userEmail });
+    if (quotaReservation && admin && userId && userEmail && recipientId) {
+      await admin.rpc('refund_ai_quota', {
+        p_user_id: userId,
+        p_user_email: userEmail,
+        p_recipient_id: recipientId,
+        p_scope: quotaReservation.scope,
+        p_month: quotaReservation.month,
+      });
     }
     return errorResponse(err);
   }

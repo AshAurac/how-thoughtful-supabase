@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import { visibleActiveEvents } from '@/lib/eventVisibility';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { Plus, Sparkles, Package, Mail } from 'lucide-react';
@@ -167,7 +168,7 @@ export default function Dashboard({ user }) {
   });
 
   const ownIds = new Set(ownEvents.map(e => e.id));
-  const events = [...ownEvents, ...sharedEvents.filter(e => !ownIds.has(e.id))].filter(e => !e.completed);
+  const events = visibleActiveEvents([...ownEvents, ...sharedEvents.filter(e => !ownIds.has(e.id))]);
 
   const { data: gifts = [] } = useQuery({
     queryKey: ['gifts', user?.email],

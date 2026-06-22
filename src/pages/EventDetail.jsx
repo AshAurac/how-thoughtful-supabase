@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus, Trash2, Check, Sparkles, Lightbulb, Pencil, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Sparkles, Lightbulb, Pencil, ChevronDown, X } from 'lucide-react';
 import { formatEventDate, daysUntil, computeBuyDates, relativeDayLabel } from '@/lib/dateUtils';
 import PriorityBadge from '@/components/PriorityBadge';
 import NativePicker from '@/components/NativePicker';
@@ -11,28 +11,9 @@ import NativePicker from '@/components/NativePicker';
 const OCCASIONS = ['birthday','anniversary','holiday','graduation','baby_shower','wedding','housewarming','thank_you','just_because','other'];
 const PRIORITIES = ['free','low','medium','high'];
 import EventChecklist from '@/components/EventChecklist';
-import GiftBounceAnimation from '@/components/GiftBounceAnimation';
 import ShareEventButton from '@/components/ShareEventButton';
 import GiftTimeline from '@/components/GiftTimeline';
 import GiftWrapAnimation from '@/components/GiftWrapAnimation';
-
-function GiftCheckbox({ checked, onChange, label }) {
-  return (
-    <button
-      onClick={onChange}
-      className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm transition-all border min-h-[44px] ${
-        checked
-          ? 'bg-moss/20 text-moss-dark border-moss/30'
-          : 'bg-muted text-muted-foreground border-border hover:bg-secondary'
-      }`}
-    >
-      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${checked ? 'bg-moss border-moss' : 'border-border'}`}>
-        {checked && <Check className="w-2.5 h-2.5 text-white" />}
-      </div>
-      {label}
-    </button>
-  );
-}
 
 export default function EventDetail() {
   const { id } = useParams();
@@ -42,13 +23,13 @@ export default function EventDetail() {
   const [newGift, setNewGift] = useState({ name: '', price: '', description: '', link: '' });
   const [reflection, setReflection] = useState('');
   const [editingReflection, setEditingReflection] = useState(false);
-  const [celebratingGift, setCelebratingGift] = useState(null);
   const [editingEvent, setEditingEvent] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showGiftWrap, setShowGiftWrap] = useState(false);
-  const [journeyComplete, setJourneyComplete] = useState(false);
+  const [showCompletionPrompt, setShowCompletionPrompt] = useState(false);
+  const [nextTimeNotes, setNextTimeNotes] = useState('');
 
   const { data: event, isLoading: loadingEvent } = useQuery({
     queryKey: ['event', id],
@@ -63,7 +44,19 @@ export default function EventDetail() {
 
   const updateEventMutation = useMutation({
     mutationFn: (data) => base44.entities.Event.update(id, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['event', id] }),
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ['event', id] });
+      const previous = queryClient.getQueryData(['event', id]);
+      queryClient.setQueryData(['event', id], old =>
+        Array.isArray(old) ? old.map(item => item.id === id ? { ...item, ...data } : item) : old
+      );
+      return { previous };
+    },
+    onError: (_error, _data, context) => {
+      if (context?.previous) queryClient.setQueryData(['event', id], context.previous);
+      toast.error('Could not save occasion progress. Please try again.');
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['event', id] }),
   });
 
   const addGiftMutation = useMutation({
@@ -74,23 +67,6 @@ export default function EventDetail() {
       setNewGift({ name: '', price: '', description: '', link: '' });
       toast.success('Gift added');
     },
-  });
-
-  const updateGiftMutation = useMutation({
-    mutationFn: ({ giftId, data }) => base44.entities.Gift.update(giftId, data),
-    onMutate: async ({ giftId, data }) => {
-      await queryClient.cancelQueries({ queryKey: ['gifts', id] });
-      const previous = queryClient.getQueryData(['gifts', id]);
-      queryClient.setQueryData(['gifts', id], (old = []) =>
-        old.map(g => g.id === giftId ? { ...g, ...data } : g)
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(['gifts', id], ctx.previous);
-      toast.error('Could not save gift checklist. Please try again.');
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['gifts', id] }),
   });
 
   const deleteGiftMutation = useMutation({
@@ -110,39 +86,20 @@ export default function EventDetail() {
     },
   });
 
-  const saveToHistoryMutation = useMutation({
-    mutationFn: (historyData) => base44.entities.GiftHistory.create(historyData),
+  const completeEventMutation = useMutation({
+    mutationFn: () => base44.functions.invoke('completeEvent', {
+      event_id: id,
+      next_time_notes: nextTimeNotes,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['gifts'] });
+      queryClient.invalidateQueries({ queryKey: ['giftHistory'] });
+      setShowCompletionPrompt(false);
+      setShowGiftWrap(true);
+    },
+    onError: (error) => toast.error(error?.message || 'Could not complete this occasion.'),
   });
-
-  const handleGiftGiven = async () => {
-    const totalSpent = gifts.reduce((s, g) => s + (g.price || 0), 0);
-    await saveToHistoryMutation.mutateAsync({
-      event_id: event.id,
-      recipient_name: event.recipient_name,
-      recipient_id: event.recipient_id || null,
-      occasion: event.occasion,
-      event_date: event.event_date,
-      year: new Date(event.event_date).getFullYear(),
-      budget: event.budget || 0,
-      notes: event.notes || '',
-      reflection: event.reflection || '',
-      giver_name: event.giver_name || '',
-      love_language: event.love_language || '',
-      total_spent: totalSpent,
-      gifts_given: gifts
-        .filter(g => g.given || g.sent || g.bought)
-        .map(g => ({
-          name: g.name,
-          price: g.price || 0,
-          description: g.description || '',
-          given: Boolean(g.given || g.sent),
-        })),
-    });
-    // Archive the occasion so it disappears from the dashboard
-    await base44.entities.Event.update(id, { completed: true });
-    queryClient.invalidateQueries({ queryKey: ['events'] });
-    setShowGiftWrap(true);
-  };
 
   if (loadingEvent) {
     return <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-20 bg-muted rounded-2xl animate-pulse" />)}</div>;
@@ -150,31 +107,13 @@ export default function EventDetail() {
   if (!event) return <div className="text-center py-12 text-muted-foreground">Event not found</div>;
 
   const days = daysUntil(event.event_date);
+  const journeyComplete = (event.journey_completed || []).length === 6;
 
   const timeline = [
     { label: 'Order online by', date: event.buy_online_by, days: daysUntil(event.buy_online_by) },
     { label: 'Buy locally by', date: event.buy_local_by, days: daysUntil(event.buy_local_by) },
     { label: 'Wrap by', date: event.wrap_by, days: daysUntil(event.wrap_by) },
   ].filter(t => t.date);
-
-  const handleGiftCheck = (gift, field) => {
-    const newValue = !gift[field];
-    const data = { [field]: newValue };
-    if (field === 'given') data.sent = newValue;
-    updateGiftMutation.mutate({ giftId: gift.id, data });
-    // Trigger bounce when marking 'given' as done (the final step)
-    if (field === 'given' && newValue) {
-      setCelebratingGift(gift.id);
-    }
-  };
-
-  const handleCelebrationDone = (gift) => {
-    setCelebratingGift(null);
-    // If not recurring, delete the gift; if recurring, just leave it
-    if (!event?.recurring) {
-      deleteGiftMutation.mutate(gift.id);
-    }
-  };
 
   const handleAddGift = (e) => {
     e.preventDefault();
@@ -184,9 +123,6 @@ export default function EventDetail() {
 
   return (
     <div className="space-y-5 max-w-lg mx-auto">
-      {celebratingGift && (
-        <GiftBounceAnimation onComplete={() => handleCelebrationDone(gifts.find(g => g.id === celebratingGift))} />
-      )}
       {showGiftWrap && (
         <GiftWrapAnimation
           recipientName={event?.recipient_name}
@@ -341,11 +277,11 @@ export default function EventDetail() {
       {/* Gift Given — shown at top when journey is complete */}
       {journeyComplete && !editingEvent && (
         <button
-          onClick={handleGiftGiven}
-          disabled={saveToHistoryMutation.isPending}
+          onClick={() => setShowCompletionPrompt(true)}
+          disabled={completeEventMutation.isPending}
           className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-terracotta to-moss text-white py-4 rounded-2xl font-heading font-bold text-base hover:opacity-90 transition-all hover:-translate-y-0.5 shadow-md disabled:opacity-60"
         >
-          {saveToHistoryMutation.isPending ? (
+          {completeEventMutation.isPending ? (
             <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           ) : (
             <span className="text-xl">🎁</span>
@@ -356,7 +292,11 @@ export default function EventDetail() {
 
       {/* Gift journey timeline */}
       {!editingEvent && (
-        <GiftTimeline daysLeft={days !== null ? days : 999} onAllDone={() => setJourneyComplete(true)} />
+        <GiftTimeline
+          daysLeft={days !== null ? days : 999}
+          completed={event.journey_completed || []}
+          onChange={steps => updateEventMutation.mutate({ journey_completed: steps })}
+        />
       )}
 
       {/* Buy-by timeline */}
@@ -449,12 +389,6 @@ export default function EventDetail() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <GiftCheckbox checked={gift.bought} onChange={() => handleGiftCheck(gift, 'bought')} label="Bought" />
-                  <GiftCheckbox checked={gift.wrapped} onChange={() => handleGiftCheck(gift, 'wrapped')} label="Wrapped" />
-                  <GiftCheckbox checked={gift.card_written} onChange={() => handleGiftCheck(gift, 'card_written')} label="Card" />
-                  <GiftCheckbox checked={gift.given || gift.sent} onChange={() => handleGiftCheck({ ...gift, given: gift.given || gift.sent }, 'given')} label="Given" />
-                </div>
               </div>
             ))}
           </div>
@@ -480,7 +414,11 @@ export default function EventDetail() {
       </div>
 
       {/* Day checklist */}
-      <EventChecklist occasion={event.occasion} />
+      <EventChecklist
+        occasion={event.occasion}
+        completed={event.checklist_completed || []}
+        onChange={steps => updateEventMutation.mutate({ checklist_completed: steps })}
+      />
 
       {/* Notes dropdown */}
       {(event.notes || event.style_preferences || event.gift_likes || event.gift_avoidances || event.wishlist_notes) && !editingEvent && (
@@ -542,6 +480,41 @@ export default function EventDetail() {
           </div>
         )}
       </div>
+      {showCompletionPrompt && (
+        <div className="fixed inset-0 z-50 flex items-end" onClick={() => setShowCompletionPrompt(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative w-full bg-card rounded-t-3xl shadow-2xl px-6 py-6 space-y-4"
+            style={{ paddingBottom: 'calc(1.5rem + var(--safe-bottom))' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-accent text-muted-foreground">before we wrap this up</p>
+                <h3 className="font-heading font-bold text-foreground text-xl">Any notes for next time?</h3>
+              </div>
+              <button onClick={() => setShowCompletionPrompt(false)} className="p-2 rounded-full hover:bg-muted">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            <textarea
+              value={nextTimeNotes}
+              onChange={e => setNextTimeNotes(e.target.value)}
+              maxLength={2000}
+              rows={4}
+              placeholder="What worked well, what to avoid, or an idea worth remembering…"
+              className="w-full border border-border rounded-2xl px-4 py-3 text-sm bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-terracotta/50 resize-none"
+            />
+            <button
+              onClick={() => completeEventMutation.mutate()}
+              disabled={completeEventMutation.isPending}
+              className="w-full bg-gradient-to-r from-terracotta to-moss text-white py-4 rounded-full font-heading font-semibold disabled:opacity-60"
+            >
+              {completeEventMutation.isPending ? 'Saving…' : 'Save and finish occasion'}
+            </button>
+          </div>
+        </div>
+      )}
       {/* Delete occasion */}
       {!editingEvent && (
         <button

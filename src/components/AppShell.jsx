@@ -7,13 +7,6 @@ import { base44 } from '@/api/base44Client';
 import MoreSheet from './MoreSheet';
 import PageTransition from './PageTransition';
 
-// Check how many free AI uses remain this month
-function getFreeUsesRemaining() {
-  const key = `ai_uses_${new Date().toISOString().slice(0, 7)}`;
-  const used = parseInt(localStorage.getItem(key) || '0', 10);
-  return Math.max(0, 3 - used);
-}
-
 const navItems = [
   { path: '/', icon: Home, label: 'Home' },
   { path: '/calendar', icon: Calendar, label: 'Calendar' },
@@ -76,8 +69,6 @@ export default function AppShell({ children, user }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [showMore, setShowMore] = useState(false);
-  const freeUsesRemaining = getFreeUsesRemaining();
-
   const { data: profile } = useQuery({
     queryKey: ['userProfile'],
     queryFn: async () => {

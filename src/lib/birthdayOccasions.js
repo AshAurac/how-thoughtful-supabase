@@ -1,5 +1,6 @@
 import { computeBuyDates } from '@/lib/dateUtils';
 import { normalizeRecipientName } from '@/lib/recipientMatching';
+import { turningAgeOnDate } from '@/lib/recipientAge';
 
 function toInt(value) {
   const parsed = parseInt(value);
@@ -102,7 +103,9 @@ export function birthdayEventPayloadFromRecipient(recipient, now = new Date()) {
     ...computeBuyDates(eventDate),
   };
 
-  if (recipient.age) payload.age_or_years = toInt(recipient.age);
+  const turningAge = turningAgeOnDate(recipient.birth_year, eventDate);
+  if (turningAge !== null) payload.age_or_years = turningAge;
+  else if (recipient.age) payload.age_or_years = toInt(recipient.age);
   if (recipient.love_language) payload.love_language = recipient.love_language;
   if (recipient.notes) payload.notes = recipient.notes;
   if (recipient.style_preferences) payload.style_preferences = recipient.style_preferences;

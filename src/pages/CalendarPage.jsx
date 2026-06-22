@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, parseISO, isValid } from 'date-fns';
 import PriorityBadge from '@/components/PriorityBadge';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { visibleActiveEvents } from '@/lib/eventVisibility';
 
 const PRIORITY_COLORS = {
   high: 'bg-terracotta',
@@ -34,8 +35,9 @@ export default function CalendarPage({ user }) {
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const startPad = getDay(monthStart);
 
+  const visibleEvents = visibleActiveEvents(events);
   const eventsOnDay = (day) =>
-    events.filter(e => {
+    visibleEvents.filter(e => {
       const d = parseISO(e.event_date);
       return isValid(d) && isSameDay(d, day);
     });

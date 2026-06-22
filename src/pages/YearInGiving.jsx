@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { Link } from 'react-router-dom';
 import { format, parseISO, isValid, getMonth } from 'date-fns';
 import { ChevronDown } from 'lucide-react';
 
@@ -88,6 +89,19 @@ function PersonHistoryCard({ name, entries }) {
               {entry.notes && (
                 <p className="text-xs text-muted-foreground">Notes: {entry.notes}</p>
               )}
+
+              {entry.next_time_notes && (
+                <p className="text-xs text-moss-dark"><span className="font-medium">Next time:</span> {entry.next_time_notes}</p>
+              )}
+
+              {entry.next_event_id && (
+                <Link
+                  to={`/events/${entry.next_event_id}`}
+                  className="inline-flex text-xs font-heading font-semibold text-terracotta hover:text-terracotta-dark"
+                >
+                  View next year’s plan →
+                </Link>
+              )}
             </div>
           ))}
         </div>
@@ -99,16 +113,6 @@ function PersonHistoryCard({ name, entries }) {
 export default function YearInGiving({ user }) {
   const year = new Date().getFullYear();
 
-  const { data: events = [] } = useQuery({
-    queryKey: ['events'],
-    queryFn: () => base44.entities.Event.list(),
-  });
-
-  const { data: gifts = [] } = useQuery({
-    queryKey: ['gifts'],
-    queryFn: () => base44.entities.Gift.list(),
-  });
-
   const { data: profile } = useQuery({
     queryKey: ['userProfile'],
     queryFn: async () => {
@@ -118,32 +122,6 @@ export default function YearInGiving({ user }) {
     enabled: !!user,
   });
 
-  // Compute stats
-  const yearEvents = events.filter(e => {
-    const d = parseISO(e.event_date);
-    return isValid(d) && d.getFullYear() === year;
-  });
-
-  const totalSpent = gifts.reduce((s, g) => s + (g.price || 0), 0);
-  const freeGifts = gifts.filter(g => !g.price || g.price === 0).length;
-  const givenGifts = gifts.filter(g => g.given || g.sent).length;
-
-  // Top person
-  const recipientCount = {};
-  yearEvents.forEach(e => {
-    recipientCount[e.recipient_name] = (recipientCount[e.recipient_name] || 0) + 1;
-  });
-  const topPerson = Object.entries(recipientCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
-
-  // Busiest month
-  const monthCount = Array(12).fill(0);
-  yearEvents.forEach(e => {
-    const d = parseISO(e.event_date);
-    if (isValid(d)) monthCount[getMonth(d)]++;
-  });
-  const busiestMonthIdx = monthCount.indexOf(Math.max(...monthCount));
-  const busiestMonth = monthCount[busiestMonthIdx] > 0 ? MONTHS[busiestMonthIdx] : '—';
-
   const firstName = user?.full_name?.split(' ')[0] || 'you';
 
   const { data: giftHistory = [] } = useQuery({
@@ -151,6 +129,30 @@ export default function YearInGiving({ user }) {
     queryFn: () => base44.entities.GiftHistory.filter({ created_by: user?.email }, '-created_date'),
     enabled: !!user?.email,
   });
+
+  const yearHistory = giftHistory.filter(entry => {
+    if (Number(entry.year) === year) return true;
+    const date = parseISO(entry.event_date || '');
+    return isValid(date) && date.getFullYear() === year;
+  });
+  const totalSpent = yearHistory.reduce((sum, entry) => sum + Number(entry.total_spent || 0), 0);
+  const yearGifts = yearHistory.flatMap(entry => entry.gifts_given || []);
+  const freeGifts = yearGifts.filter(gift => !Number(gift.price || 0)).length;
+  const givenGifts = yearGifts.filter(gift => gift.given !== false).length;
+
+  const recipientCount = {};
+  yearHistory.forEach(entry => {
+    recipientCount[entry.recipient_name] = (recipientCount[entry.recipient_name] || 0) + 1;
+  });
+  const topPerson = Object.entries(recipientCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+
+  const monthCount = Array(12).fill(0);
+  yearHistory.forEach(entry => {
+    const date = parseISO(entry.event_date || '');
+    if (isValid(date)) monthCount[getMonth(date)] += 1;
+  });
+  const busiestMonthIdx = monthCount.indexOf(Math.max(...monthCount));
+  const busiestMonth = monthCount[busiestMonthIdx] > 0 ? MONTHS[busiestMonthIdx] : '—';
 
   // Group history by recipient
   const historyByRecipient = giftHistory.reduce((acc, h) => {
@@ -187,7 +189,7 @@ export default function YearInGiving({ user }) {
 
         {/* 2×2 stat grid */}
         <div className="grid grid-cols-2 gap-3">
-          <StatCard eyebrow="occasions" value={yearEvents.length} label="people celebrated" delay={500} />
+          <StatCard eyebrow="occasions" value={yearHistory.length} label="people celebrated" delay={500} />
           <StatCard eyebrow="gifts" value={givenGifts} label="given with intention" delay={700} />
           <StatCard eyebrow="spent" value={`$${Math.round(totalSpent)}`} label="on those you love" delay={900} />
           <StatCard eyebrow="free gifts" value={freeGifts} label="gifts of time & skill" delay={1100} />
@@ -245,7 +247,7 @@ export default function YearInGiving({ user }) {
             "Thank you for being thoughtful."
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            — from {yearEvents.length} people, in spirit ♥
+            — from {yearHistory.length} occasions, in spirit ♥
           </p>
         </div>
       </div>

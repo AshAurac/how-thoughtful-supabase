@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { daysUntil, formatEventDate, relativeDayLabel } from '@/lib/dateUtils';
+import { isEventVisible } from '@/lib/eventVisibility';
 
 // Priority weights: higher = more urgent to act on
 const PRIORITY_WEIGHT = { high: 3, medium: 2, low: 1, free: 0 };
@@ -39,6 +40,7 @@ export default function ActionQueue({ events, gifts }) {
   // Only show future events (within 90 days)
   const active = events
     .filter(e => {
+      if (e.completed || !isEventVisible(e)) return false;
       const d = daysUntil(e.event_date);
       return d !== null && d >= 0 && d <= 90;
     })

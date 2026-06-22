@@ -144,6 +144,7 @@ serve(async (req) => {
       .from('events')
       .select('*')
       .eq('completed', false)
+      .or(`background_until.is.null,background_until.lte.${new Date().toISOString().slice(0, 10)}`)
       .not('event_date', 'is', null);
 
     if (eventsError) throw eventsError;

@@ -6,6 +6,8 @@ import { Sparkles, Lightbulb, Bookmark, BookmarkCheck, ExternalLink, ChevronDown
 import { getCuratedIdeas } from '@/lib/catalogs';
 import PaywallModal from '@/components/PaywallModal';
 import NativePicker from '@/components/NativePicker';
+import { ageForRecipient, normalizeRecipientAgeFields } from '@/lib/recipientAge';
+import { normalizeRecipientName } from '@/lib/recipientMatching';
 
 const AFFILIATE_TAG = 'howthoughtful-20';
 
@@ -70,12 +72,8 @@ export default function IdeasPage({ user }) {
   const [showRecipientPicker, setShowRecipientPicker] = useState(false);
   const [occasion, setOccasion] = useState('birthday');
   const [budget, setBudget] = useState('50');
+  const [recipientAge, setRecipientAge] = useState('');
   const [savedIds, setSavedIds] = useState(new Set());
-
-  // Track local uses in state so the gate re-evaluates on every render
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const lsKey = `ai_uses_${currentMonth}`;
-  const [localUses, setLocalUses] = useState(() => parseInt(localStorage.getItem(lsKey) || '0', 10));
 
   const queryClient = useQueryClient();
 
@@ -109,6 +107,20 @@ export default function IdeasPage({ user }) {
     enabled: !!user && !!eventId,
   });
 
+  const { data: allowance, isFetching: allowanceLoading } = useQuery({
+    queryKey: ['aiAllowance', selectedRecipientId],
+    queryFn: async () => {
+      const result = await base44.integrations.Core.InvokeLLM({
+        action: 'status',
+        recipient_id: selectedRecipientId,
+      });
+      return result.allowance;
+    },
+    enabled: !!user && !!selectedRecipientId,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
+
   useEffect(() => {
     setSavedIds(new Set(savedIdeas.map(s => s.name)));
   }, [savedIdeas]);
@@ -127,45 +139,80 @@ export default function IdeasPage({ user }) {
     if (match) setSelectedRecipientId(match.id);
   }, [recipient, recipients, selectedRecipientId]);
 
+  useEffect(() => {
+    if (!selectedRecipientId) {
+      setRecipientAge('');
+      return;
+    }
+    const selected = recipients.find(r => r.id === selectedRecipientId);
+    const age = ageForRecipient(selected);
+    setRecipientAge(age === null ? '' : String(age));
+  }, [recipients, selectedRecipientId]);
+
   const isPremium = profile?.is_premium;
 
-  // If premium, use profile data; otherwise fall back to localStorage
-  const monthlyUses = isPremium
-    ? (profile?.monthly_ai_reset_month === currentMonth ? (profile?.monthly_ai_uses || 0) : 0)
-    : localUses;
-
-  const FREE_LIMIT = 3;
-  const PREMIUM_LIMIT = 30;
-  const limit = isPremium ? PREMIUM_LIMIT : FREE_LIMIT;
-  const usesRemaining = Math.max(0, limit - monthlyUses);
-  const canUseAI = usesRemaining > 0;
+  const usesRemaining = allowance?.remaining;
+  const selectedRecipient = selectedRecipientId
+    ? recipients.find(r => r.id === selectedRecipientId)
+    : null;
 
   const aiButtonLabel = () => {
-    if (usesRemaining > 0) return `Generate AI ideas (${usesRemaining} left this month)`;
-    return isPremium ? "Monthly limit reached" : "Unlock AI ideas";
+    if (!selectedRecipientId || allowanceLoading || !allowance) return 'Generate AI ideas';
+    if (usesRemaining > 0) return `Generate AI ideas (${usesRemaining} left for ${recipient})`;
+    return isPremium ? 'Monthly limit reached' : 'Unlock AI ideas';
   };
 
   const aiStatusBadge = () => {
-    if (isPremium) return <span className="text-xs text-moss font-medium">{usesRemaining} of {PREMIUM_LIMIT} uses this month</span>;
-    if (usesRemaining > 0) return <span className="text-xs text-terracotta font-medium">{usesRemaining} free uses this month</span>;
+    if (!selectedRecipientId || allowanceLoading || !allowance) return null;
+    if (isPremium) return <span className="text-xs text-moss font-medium">{usesRemaining} of {allowance.limit} account uses this month</span>;
+    if (usesRemaining > 0) return <span className="text-xs text-terracotta font-medium">{usesRemaining} free uses for {recipient} this month</span>;
     return <span className="text-xs text-muted-foreground">free limit reached</span>;
   };
 
+  const ensureRecipient = async () => {
+    const name = recipient.trim();
+    if (!name) throw new Error('Choose or enter who these ideas are for.');
+
+    let person = selectedRecipient;
+    if (!person) {
+      person = recipients.find(r => normalizeRecipientName(r.name) === normalizeRecipientName(name));
+    }
+
+    if (!person) {
+      person = await base44.entities.Recipient.create({
+        name,
+        ...(recipientAge ? { age: Number.parseInt(recipientAge, 10) } : {}),
+      });
+      await queryClient.invalidateQueries({ queryKey: ['recipients'] });
+      setSelectedRecipientId(person.id);
+      setRecipient(person.name);
+      return person;
+    }
+
+    if (recipientAge && !person.birth_year && Number.parseInt(recipientAge, 10) !== person.age) {
+      const ageFields = normalizeRecipientAgeFields({ ...person, age: recipientAge, birth_year: null });
+      person = await base44.entities.Recipient.update(person.id, ageFields);
+      await queryClient.invalidateQueries({ queryKey: ['recipients'] });
+    }
+
+    if (!selectedRecipientId) setSelectedRecipientId(person.id);
+    return person;
+  };
+
   const handleGetAI = async () => {
-    if (!canUseAI) {
+    if (selectedRecipientId && allowance && usesRemaining <= 0) {
       setPaywallReason(isPremium ? 'out_of_credits' : 'paywall');
       return;
     }
 
     setLoading(true);
     try {
+      const recipientProfile = await ensureRecipient();
+      const activeRecipientId = recipientProfile.id;
       // Build recipient context from saved profile if available
-      const recipientProfile = selectedRecipientId
-        ? recipients.find(r => r.id === selectedRecipientId)
-        : null;
-
       const recipientLines = [];
-      if (recipientProfile?.age) recipientLines.push(`Age: ${recipientProfile.age}`);
+      const currentAge = ageForRecipient(recipientProfile);
+      if (currentAge !== null) recipientLines.push(`Age: ${currentAge}`);
       if (recipientProfile?.relationship) recipientLines.push(`Relationship to giver: ${recipientProfile.relationship}`);
       if (recipientProfile?.interests?.length) recipientLines.push(`Known interests & hobbies: ${recipientProfile.interests.join(', ')}`);
       if (recipientProfile?.notes) recipientLines.push(`Personal notes about them: ${recipientProfile.notes}`);
@@ -209,6 +256,8 @@ Return STRICT JSON only — no prose, no markdown — as:
 CRUCIAL: at least ONE idea MUST be free ($0) — a personal act, skill, or gift of time that suits the recipient.`;
 
       const result = await base44.integrations.Core.InvokeLLM({
+        action: 'generate',
+        recipient_id: activeRecipientId,
         prompt,
         response_json_schema: {
           type: "object",
@@ -230,20 +279,16 @@ CRUCIAL: at least ONE idea MUST be free ($0) — a personal act, skill, or gift 
       });
 
       setIdeas(result.ideas || []);
-
-      // Update usage tracking
-      const newUses = monthlyUses + 1;
-      if (!isPremium) {
-        localStorage.setItem(lsKey, String(newUses));
-        setLocalUses(newUses);
-        if (newUses >= FREE_LIMIT) {
-          toast('That was your last free AI idea this month — upgrade for more!');
-        }
-      }
-
-      // The Edge Function records usage atomically. This refresh is display-only.
+      queryClient.setQueryData(['aiAllowance', activeRecipientId], result.usage);
       queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+      if (!isPremium && result.usage?.remaining === 0) {
+        toast('That was the last free AI generation for this person this month.');
+      }
     } catch (err) {
+      if (/quota exceeded/i.test(err?.message || '')) {
+        setPaywallReason(isPremium ? 'out_of_credits' : 'paywall');
+        if (selectedRecipientId) queryClient.invalidateQueries({ queryKey: ['aiAllowance', selectedRecipientId] });
+      }
       toast.error(err?.message || 'Something went wrong. Try again.');
     }
     setLoading(false);
@@ -297,7 +342,7 @@ CRUCIAL: at least ONE idea MUST be free ($0) — a personal act, skill, or gift 
         >
           <Sparkles className="w-4 h-4 text-terracotta" />
           AI personalized
-          {usesRemaining > 0 && (
+          {selectedRecipientId && usesRemaining > 0 && (
             <span className="w-2 h-2 rounded-full bg-terracotta animate-shimmer" />
           )}
         </button>
@@ -328,7 +373,7 @@ CRUCIAL: at least ONE idea MUST be free ($0) — a personal act, skill, or gift 
               {recipient && (
                 <button
                   type="button"
-                  onClick={e => { e.stopPropagation(); setRecipient(''); setSelectedRecipientId(null); }}
+                  onClick={e => { e.stopPropagation(); setRecipient(''); setRecipientAge(''); setSelectedRecipientId(null); }}
                   className="p-1 rounded-full hover:bg-muted"
                 >
                   <X className="w-3 h-3 text-muted-foreground" />
@@ -355,7 +400,7 @@ CRUCIAL: at least ONE idea MUST be free ($0) — a personal act, skill, or gift 
                 <input
                   autoFocus
                   value={recipient}
-                  onChange={e => { setRecipient(e.target.value); setSelectedRecipientId(null); }}
+                  onChange={e => { setRecipient(e.target.value); setRecipientAge(''); setSelectedRecipientId(null); }}
                   onKeyDown={e => { if (e.key === 'Enter') setShowRecipientPicker(false); }}
                   placeholder="Or type a name…"
                   className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1 font-body"
@@ -364,7 +409,7 @@ CRUCIAL: at least ONE idea MUST be free ($0) — a personal act, skill, or gift 
             </div>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <NativePicker
             label="Occasion"
             value={occasion}
@@ -377,6 +422,17 @@ CRUCIAL: at least ONE idea MUST be free ($0) — a personal act, skill, or gift 
             onChange={e => setBudget(e.target.value)}
             placeholder="Budget ($)"
             className="border border-border rounded-2xl px-4 py-3 text-foreground bg-card focus:outline-none focus:ring-2 focus:ring-terracotta/50 font-body"
+          />
+          <input
+            type="number"
+            min="0"
+            max="130"
+            value={recipientAge}
+            onChange={e => setRecipientAge(e.target.value)}
+            placeholder="Age"
+            disabled={Boolean(selectedRecipient?.birth_year)}
+            title={selectedRecipient?.birth_year ? 'Age is calculated from their saved birth year' : 'Age (optional)'}
+            className="border border-border rounded-2xl px-4 py-3 text-foreground bg-card focus:outline-none focus:ring-2 focus:ring-terracotta/50 font-body disabled:opacity-60"
           />
         </div>
       </div>

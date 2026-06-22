@@ -5,11 +5,11 @@ import { toast } from 'sonner';
 import { Upload, X, CheckCircle2, AlertCircle, Download } from 'lucide-react';
 import { findRecipientMatch, mergeRecipientPayload, recipientPayloadFromForm } from '@/lib/recipientMatching';
 
-const EXAMPLE_CSV = `name,relationship,interests,love_language,notes
-Mum,parent,"cooking, gardening, reading",acts_of_service,Loves anything homemade
-Jake,friend,"gaming, hiking",quality_time,Prefers experiences over things
-Emma,sister,"art, yoga, coffee",gifts,Coffee snob - always oat milk
-Dad,parent,"woodworking, cricket",words_of_affirmation,`;
+const EXAMPLE_CSV = `name,relationship,age,birthday_month,birthday_day,birth_year,interests,love_language,notes
+Mum,parent,,8,14,1968,"cooking, gardening, reading",acts_of_service,Loves anything homemade
+Jake,friend,31,,,,"gaming, hiking",quality_time,Prefers experiences over things
+Emma,sister,,3,4,1994,"art, yoga, coffee",gifts,Coffee snob - always oat milk
+Dad,parent,,11,22,1965,"woodworking, cricket",words_of_affirmation,`;
 
 const LOVE_LANGUAGE_VALUES = ['words_of_affirmation','quality_time','gifts','acts_of_service','physical_touch'];
 
@@ -39,6 +39,8 @@ function validateRow(row) {
   if (!row.name) errors.push('Missing name');
   if (row.love_language && !LOVE_LANGUAGE_VALUES.includes(row.love_language))
     errors.push(`Love language must be one of: ${LOVE_LANGUAGE_VALUES.join(', ')}`);
+  if (row.birth_year && (Number(row.birth_year) < 1800 || Number(row.birth_year) > new Date().getFullYear()))
+    errors.push('Birth year is outside the supported range');
   return errors;
 }
 
@@ -80,6 +82,7 @@ export default function BulkImportRecipients({ onClose }) {
   const rowPayload = (row) => recipientPayloadFromForm({
     name: row.name,
     age: row.age,
+    birth_year: row.birth_year,
     birthday_month: row.birthday_month,
     birthday_day: row.birthday_day,
     relationship: row.relationship || '',
@@ -169,7 +172,7 @@ export default function BulkImportRecipients({ onClose }) {
             >
               <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-sm font-heading font-semibold text-foreground">Drop CSV here or click to browse</p>
-              <p className="text-xs text-muted-foreground mt-1">Columns: name, relationship, interests, love_language, notes</p>
+              <p className="text-xs text-muted-foreground mt-1">Columns include age, birthday month/day, birth year, interests, love language, and notes</p>
               <input id="recipients-csv" type="file" accept=".csv" className="hidden" onChange={e => e.target.files[0] && handleFile(e.target.files[0])} />
             </div>
 

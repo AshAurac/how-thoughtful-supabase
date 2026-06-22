@@ -1,3 +1,5 @@
+import { normalizeRecipientAgeFields } from './recipientAge.js';
+
 export function normalizeRecipientName(name = '') {
   return name
     .toLowerCase()
@@ -58,11 +60,10 @@ export function findRecipientMatch(name, recipients = []) {
 }
 
 export function recipientPayloadFromForm(data) {
+  const ageFields = normalizeRecipientAgeFields(data);
   return {
     name: data.name?.trim() || '',
-    age: data.age ? parseInt(data.age) : undefined,
-    birthday_month: data.birthday_month ? parseInt(data.birthday_month) : undefined,
-    birthday_day: data.birthday_day ? parseInt(data.birthday_day) : undefined,
+    ...ageFields,
     relationship: data.relationship || '',
     love_language: data.love_language || '',
     interests: Array.isArray(data.interests)
