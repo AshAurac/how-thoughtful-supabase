@@ -1,0 +1,45 @@
+name: Deploy Supabase
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy database and Edge Functions
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_PROJECT_REF: unzxklbbjarukodndxes
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Apply database migrations
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20260620074530_recipient_ai_and_event_lifecycle.sql
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20260625120000_conversational_family_pricing_release.sql
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy JWT-protected Edge Functions
+        run: |
+          supabase functions deploy capturePlan --project-ref "$SUPABASE_PROJECT_REF" --use-api
+          supabase functions deploy continueCapture --project-ref "$SUPABASE_PROJECT_REF" --use-api
+          supabase functions deploy commitCapturePlan --project-ref "$SUPABASE_PROJECT_REF" --use-api
+          supabase functions deploy familyMembership --project-ref "$SUPABASE_PROJECT_REF" --use-api
+          supabase functions deploy createPortalSession --project-ref "$SUPABASE_PROJECT_REF" --use-api
+
+      - name: Deploy public/webhook Edge Functions
+        run: |
+          supabase functions deploy createCheckout --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt
+          supabase functions deploy stripeWebhook --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt
