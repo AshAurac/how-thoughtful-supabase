@@ -13,6 +13,7 @@ import Dashboard from './pages/Dashboard';
 import EventsList from './pages/EventsList';
 import CreateEvent from './pages/CreateEvent';
 import EventDetail from './pages/EventDetail';
+import CapturePage from './pages/CapturePage';
 import CalendarPage from './pages/CalendarPage';
 import IdeasPage from './pages/IdeasPage';
 import BudgetPage from './pages/BudgetPage';
@@ -29,6 +30,7 @@ import PublicWishlist from './pages/PublicWishlist';
 import RestockPage from './pages/RestockPage';
 import LandingPage from './pages/LandingPage';
 import SharedListsPage from './pages/SharedListsPage';
+import FamilyPage from './pages/FamilyPage';
 import GroupManagePage from './pages/GroupManagePage';
 import PublicGroupList from './pages/PublicGroupList';
 import JoinEventPage from './pages/JoinEventPage';
@@ -111,6 +113,7 @@ const AuthenticatedApp = () => {
       <Route path="/events" element={<RequireAuth user={user}><AppShell user={user}><EventsList user={user} /></AppShell></RequireAuth>} />
       <Route path="/events/new" element={<RequireAuth user={user}><AppShell user={user}><CreateEvent /></AppShell></RequireAuth>} />
       <Route path="/events/:id" element={<RequireAuth user={user}><AppShell user={user}><EventDetail user={user} /></AppShell></RequireAuth>} />
+      <Route path="/capture" element={<RequireAuth user={user}><AppShell user={user}><CapturePage user={user} /></AppShell></RequireAuth>} />
       <Route path="/calendar" element={<RequireAuth user={user}><AppShell user={user}><CalendarPage user={user} /></AppShell></RequireAuth>} />
       <Route path="/ideas" element={<RequireAuth user={user}><AppShell user={user}><IdeasPage user={user} /></AppShell></RequireAuth>} />
       <Route path="/budget" element={<RequireAuth user={user}><AppShell user={user}><BudgetPage user={user} /></AppShell></RequireAuth>} />
@@ -125,6 +128,7 @@ const AuthenticatedApp = () => {
       <Route path="/wishlist" element={<RequireAuth user={user}><AppShell user={user}><WishlistPage user={user} /></AppShell></RequireAuth>} />
       <Route path="/restock" element={<RequireAuth user={user}><AppShell user={user}><RestockPage /></AppShell></RequireAuth>} />
       <Route path="/group-lists" element={<RequireAuth user={user}><AppShell user={user}><SharedListsPage /></AppShell></RequireAuth>} />
+      <Route path="/family" element={<RequireAuth user={user}><AppShell user={user}><FamilyPage user={user} /></AppShell></RequireAuth>} />
       <Route path="/group-manage/:id" element={<RequireAuth user={user}><AppShell user={user}><GroupManagePage /></AppShell></RequireAuth>} />
 
       <Route path="*" element={<PageNotFound />} />

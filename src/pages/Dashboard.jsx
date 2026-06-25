@@ -4,12 +4,13 @@ import { base44 } from '@/api/base44Client';
 import { visibleActiveEvents } from '@/lib/eventVisibility';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
-import { Plus, Sparkles, Package, Mail } from 'lucide-react';
+import { Plus, Sparkles, Package, Mail, CalendarPlus, CheckCircle2, HelpCircle } from 'lucide-react';
 import { getUpcomingEvents, daysUntil, urgencyColor, formatEventDate, relativeDayLabel } from '@/lib/dateUtils';
 import PriorityBadge from '@/components/PriorityBadge';
-import ProfileNudge from '@/components/ProfileNudge';
 import ActionQueue from '@/components/ActionQueue';
 import { isEmailVerified } from '@/lib/authStatus';
+import ConversationalCapture from '@/components/ConversationalCapture';
+import { toast } from 'sonner';
 
 function getNextActionLabel(days) {
   if (days <= 0) return { label: 'Today!', urgent: true };
@@ -129,8 +130,8 @@ function UpcomingByMonth({ upcoming }) {
 
 export default function Dashboard({ user }) {
   const queryClient = useQueryClient();
-  const [showNudge, setShowNudge] = useState(false);
   const [activeTab, setActiveTab] = useState('priority');
+  const [tourChoiceVisible, setTourChoiceVisible] = useState(false);
   const emailVerified = isEmailVerified(user);
 
   const { onTouchStart, onTouchMove, onTouchEnd, indicatorRef } = usePullToRefresh(async () => {
@@ -144,16 +145,41 @@ export default function Dashboard({ user }) {
       return profiles[0] || null;
     },
     enabled: !!user,
-    onSuccess: (data) => {
-      if (!data?.profile_completed) setShowNudge(true);
-    },
   });
 
   useEffect(() => {
-    if (profile !== undefined && !profile?.profile_completed) {
-      setShowNudge(true);
-    }
+    const dismissed = localStorage.getItem('howThoughtfulTourDismissed');
+    const completed = localStorage.getItem('howThoughtfulTourCompleted');
+    const shouldOffer = profile?.first_capture_completed_at && profile?.app_tour_status === 'offered' && !dismissed && !completed;
+    setTourChoiceVisible(Boolean(shouldOffer));
   }, [profile]);
+
+  useEffect(() => {
+    const restart = () => setTourChoiceVisible(true);
+    window.addEventListener('how-thoughtful-tour-restart', restart);
+    return () => window.removeEventListener('how-thoughtful-tour-restart', restart);
+  }, []);
+
+  const handleTourChoice = async (choice) => {
+    if (choice === 'show') {
+      localStorage.setItem('howThoughtfulTourCompleted', 'true');
+      toast.info('Tiny tour: Capture adds plans, Calendar shows timing, People holds details, and More has the specialised tools.');
+    } else if (choice === 'never') {
+      localStorage.setItem('howThoughtfulTourDismissed', 'true');
+    }
+    setTourChoiceVisible(false);
+
+    try {
+      if (profile?.id) {
+        await base44.entities.UserProfile.update(profile.id, {
+          app_tour_status: choice === 'show' ? 'completed' : choice === 'never' ? 'dismissed' : 'maybe_later',
+        });
+        queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+      }
+    } catch {
+      // Local choice still takes effect.
+    }
+  };
 
   const { data: ownEvents = [] } = useQuery({
     queryKey: ['events', user?.email],
@@ -176,10 +202,28 @@ export default function Dashboard({ user }) {
     enabled: !!user?.email,
   });
 
+  const { data: planActions = [] } = useQuery({
+    queryKey: ['planActions', user?.email],
+    queryFn: () => base44.entities.PlanAction.filter({ created_by: user?.email, completed: false }, 'due_date'),
+    enabled: !!user?.email,
+  });
+
   const upcoming = getUpcomingEvents(events, 365 * 3);
   const deliveries = gifts.filter(g => g.delivery_status === 'ordered' || g.delivery_status === 'shipped');
-  const totalBudget = events.reduce((s, e) => s + (e.budget || 0), 0);
-  const totalSpent = gifts.reduce((s, g) => s + (g.price || 0) + (g.shipping_cost || 0), 0);
+  const importantActions = [
+    ...planActions.slice(0, 2).map(action => ({
+      icon: CheckCircle2,
+      title: action.title,
+      subtitle: action.due_date ? `Due ${formatEventDate(action.due_date)}` : 'From your capture',
+      to: action.event_id ? `/events/${action.event_id}` : '/capture',
+    })),
+    ...upcoming.slice(0, 3).map(event => ({
+      icon: CalendarPlus,
+      title: `${event.recipient_name}: ${event.occasion?.replace(/_/g, ' ')}`,
+      subtitle: `${relativeDayLabel(daysUntil(event.event_date), true)} · ${formatEventDate(event.event_date)}`,
+      to: `/events/${event.id}`,
+    })),
+  ].slice(0, 3);
 
   return (
     <div
@@ -206,18 +250,50 @@ export default function Dashboard({ user }) {
               : 'Nothing upcoming — enjoy the peace'}
           </h1>
         </div>
-        <Link
-          to="/events/new"
-          className="flex items-center gap-2 bg-terracotta text-white px-4 py-2 rounded-full font-heading font-semibold text-sm hover:bg-terracotta-dark transition-all hover:-translate-y-0.5 whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4" /> Add
+        <Link to="/events/new" className="flex items-center gap-2 border border-border text-foreground px-4 py-2 rounded-full font-heading font-semibold text-sm hover:bg-muted transition-all whitespace-nowrap">
+          <Plus className="w-4 h-4" /> Manual
         </Link>
       </div>
 
-      {/* Profile nudge */}
-      {showNudge && <ProfileNudge />}
+      <ConversationalCapture compact />
 
+      {tourChoiceVisible && (
+        <div className="bg-moss/15 border border-moss/30 rounded-2xl p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-full bg-moss/20 flex items-center justify-center">
+              <HelpCircle className="w-4 h-4 text-moss" />
+            </div>
+            <div className="flex-1">
+              <p className="font-heading font-semibold text-foreground">Want a quick tour?</p>
+              <p className="text-sm text-muted-foreground mt-1">Now that you’ve captured your first occasion, I can point out the useful places without making the app feel like homework.</p>
+              <div className="flex flex-wrap gap-2 mt-3">
+                <button onClick={() => handleTourChoice('show')} className="bg-moss text-white rounded-full px-4 py-2 text-sm font-heading font-semibold">Show me</button>
+                <button onClick={() => handleTourChoice('later')} className="bg-card border border-border rounded-full px-4 py-2 text-sm font-heading font-semibold">Maybe later</button>
+                <button onClick={() => handleTourChoice('never')} className="text-muted-foreground rounded-full px-4 py-2 text-sm font-heading font-semibold">Don’t show again</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
+      {importantActions.length > 0 && (
+        <div>
+          <h2 className="font-heading font-semibold text-lg text-foreground mb-3">Most useful next</h2>
+          <div className="grid gap-2">
+            {importantActions.map(({ icon: Icon, title, subtitle, to }, index) => (
+              <Link key={`${title}-${index}`} to={to} className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3 hover:bg-muted">
+                <div className="w-9 h-9 rounded-full bg-terracotta/10 flex items-center justify-center">
+                  <Icon className="w-4 h-4 text-terracotta" />
+                </div>
+                <div>
+                  <p className="font-heading font-semibold text-foreground">{title}</p>
+                  <p className="text-xs text-muted-foreground">{subtitle}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tabbed views: Coming up / Priority */}
       <div>

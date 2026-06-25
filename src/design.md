@@ -113,9 +113,9 @@ The home route `/` renders `<LandingPage>` for unauthenticated users and `<Dashb
 
 ### Shell (AppShell)
 
-- Sticky top bar with logo + greeting + upgrade CTA
-- Floating bottom pill nav: **Home / Calendar / Ideas / More**
-- `More` drawer exposes: People, Budget, Deliveries, Saved, Groups, Restock, Wishlist, Year in Giving, Profile
+- Sticky top bar with logo + greeting; no persistent upgrade pill
+- Floating bottom pill nav: **Home / Calendar / Capture / People / More**
+- `More` drawer exposes contextual tools: Generate ideas, Budget, Deliveries, Saved Ideas, Groups, Family, Wishlist, Year in Giving, Plans, Profile
 - Tab history is preserved in a `useRef` so switching tabs restores last visited path
 - Dark mode is synced from `localStorage` or system preference
 
@@ -125,7 +125,8 @@ The home route `/` renders `<LandingPage>` for unauthenticated users and `<Dashb
 |---|---|---|
 | `/` | Dashboard | Home |
 | `/calendar` | CalendarPage | Calendar |
-| `/ideas` | IdeasPage | Ideas |
+| `/capture` | CapturePage | Capture |
+| `/recipients` | RecipientsPage | People |
 | `/events` | EventsList | Occasions |
 | `/events/:id` | EventDetail | Occasion |
 | `/recipients` | RecipientsPage | People |
@@ -202,19 +203,31 @@ Two modes:
 1. **Curated / Free** — `getCuratedIdeas(skills, loveLanguage, recipientInterests, occasion)` — no API call. Matches giver skills to recipient interests, then fills with universal free ideas, prioritised by love language.
 
 2. **AI-generated** — LLM call via `base44.integrations.Core.InvokeLLM`. Gated by subscription tier:
-   - Free: 3 uses/month (tracked in `localStorage` with key `ai_uses_YYYY-MM`)
-   - Individual: 30 uses/month (tracked on `UserProfile.monthly_ai_uses`)
-   - Family: 30 uses/month
+   - Free: 3 monthly gift-generation actions per recipient
+   - Individual: 30 monthly account-wide gift-generation actions
+   - Family: gift-generation entitlement remains compatible with Individual; conversational capture is shared family-wide
+   - Usage is server-owned; localStorage counters are not authoritative
 
 **Thoughtfulness Boosters**: Suggestions for elevating any gift based on the recipient's love language (from `THOUGHTFULNESS_BOOSTERS` in catalogs).
 
-### Feature Flags (`hooks/useFeatureFlags.js`)
+### Feature Discovery
 
-Reads from `UserProfile`, exposes `isUnlocked(key)`, `unlock(key)`, `toggle(key, value)`. Used to progressively reveal app sections.
+Feature discovery is contextual instead of locked-looking:
 
-### Free AI Counter
+- Bottom nav: Home, Calendar, Capture, People, More.
+- More is a friendly toolbox, not a faded lock grid.
+- The optional tour appears after the first captured occasion and can be restarted from More.
+- Budget, deliveries, group gifting, wishlist, and Year in Giving are introduced when the user naturally mentions or creates the relevant thing.
 
-`getFreeUsesRemaining()` in AppShell reads from `localStorage` key `ai_uses_YYYY-MM` and returns `Math.max(0, 3 - used)`. Shown in Ideas page and used to gate AI generation.
+### AI and Capture Allowances
+
+AI usage is server-owned:
+
+- Free gift ideas: 3 monthly AI gift-generation actions per recipient.
+- Free conversational capture: 3 successful captures for the lifetime of the account.
+- Individual: 30 conversational captures/month and 30 gift-generation actions/month.
+- Family: 60 shared conversational captures/month.
+- Failed or abandoned captures do not count.
 
 ---
 
@@ -224,17 +237,20 @@ Reads from `UserProfile`, exposes `isUnlocked(key)`, `unlock(key)`, `toggle(key,
 
 | Plan | Price (AUD) | AI Ideas/mo | Occasions | Collaborators |
 |---|---|---|---|---|
-| Free | $0 | 3 | 6 | — |
-| Individual | $3.99/mo or $24.99/yr | 30 | Unlimited | 1 per occasion |
-| Family | $5.99/mo or $49.99/yr | 30 | Unlimited | 6 per occasion, 6 accounts |
+| Free | A$0 | 3 per recipient + 3 lifetime captures | Manual + limited capture | — |
+| Individual | A$6.99/mo or A$59.99/yr | 30 gift actions + 30 captures | Unlimited | Occasion collaborators |
+| Family | A$9.99/mo or A$89.99/yr | 60 shared captures | Unlimited | Owner + 5 adults + 4 managed kid profiles |
 
-Annual savings: Individual saves 48%, Family saves 30%.
+Annual savings: Individual saves about 28%, Family saves about 25%.
 
 ### Stripe
 
-- Backend function: `createCheckout` — creates Stripe Checkout session
-- Backend function: `stripeWebhook` — handles `checkout.session.completed`, updates `UserProfile.is_premium`, `premium_type`
+- Shared pricing source: `src/lib/pricing.js`
+- Backend function: `createCheckout` — creates Stripe Checkout sessions using only server-side price mappings
+- Backend function: `stripeWebhook` — idempotently handles checkout completion, subscription updates/deletion, successful/failed invoices, and resolves entitlements from known Price IDs
+- Backend function: `createPortalSession` — opens Customer Portal for cancellation, payment methods, and plan management
 - `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` stored as secrets
+- Current Stripe price secrets: `STRIPE_PRICE_INDIVIDUAL_MONTHLY`, `STRIPE_PRICE_INDIVIDUAL_ANNUAL`, `STRIPE_PRICE_FAMILY_MONTHLY`, `STRIPE_PRICE_FAMILY_ANNUAL`
 - Checkout blocked in iframes (alert shown)
 
 ---
@@ -244,7 +260,12 @@ Annual savings: Individual saves 48%, Family saves 30%.
 | Function | Purpose |
 |---|---|
 | `createCheckout` | Creates Stripe Checkout session for Individual/Family plans |
-| `stripeWebhook` | Handles Stripe payment webhooks, upgrades user profile |
+| `stripeWebhook` | Handles Stripe subscription webhooks and entitlement changes |
+| `createPortalSession` | Creates a Stripe Customer Portal session |
+| `capturePlan` | Analyses typed/spoken brain dumps into reviewable plan cards |
+| `continueCapture` | Adds one follow-up answer to an in-progress capture |
+| `commitCapturePlan` | Atomically saves reviewed people, occasions, ideas, and actions |
+| `familyMembership` | Creates families, invites/removes adults, and manages kid profiles |
 | `sendEventReminders` | Sends email reminders at 30/14/3 days before occasions |
 | `sendEventInvite` | Sends collaborator invite email with invite token |
 | `acceptEventInvite` | Validates token, adds collaborator to event |
@@ -317,5 +338,5 @@ Contact email: `hello@howthoughtful.app`
 | Thoughtfulness booster | Tips | Ways to elevate any gift |
 | Upgrade | Premium, Pro | Subscription CTA |
 | Year in Giving | Annual review | End-of-year gifting summary |
-| Restock | Supply tracker | Go-to gifts to keep in stock |
+| Restock | Supply tracker | Existing page kept outside primary scope |
 | Groups | Group gifting | SharedList feature |

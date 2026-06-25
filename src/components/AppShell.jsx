@@ -1,39 +1,38 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 // navigate kept for tab switching logic below
-import { Home, Calendar, Sparkles, MoreHorizontal, Settings, Users, PiggyBank, Package, Bookmark, Star, User, Gift } from 'lucide-react';
+import { Home, Calendar, PlusCircle, MoreHorizontal, Settings, Users, PiggyBank, Package, Bookmark, Star, User, Gift } from 'lucide-react';
 import { useState, useRef, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import MoreSheet from './MoreSheet';
 import PageTransition from './PageTransition';
 
 const navItems = [
   { path: '/', icon: Home, label: 'Home' },
   { path: '/calendar', icon: Calendar, label: 'Calendar' },
-  { path: '/ideas', icon: Sparkles, label: 'Ideas' },
+  { path: '/capture', icon: PlusCircle, label: 'Capture' },
+  { path: '/recipients', icon: Users, label: 'People' },
 ];
 
 // All "More" drawer paths — show brand logo on these too
-const MORE_PATHS = ['/recipients', '/budget', '/deliveries', '/saved', '/group-lists', '/restock', '/wishlist', '/season', '/year-in-giving', '/profile'];
+const MORE_PATHS = ['/budget', '/deliveries', '/saved', '/group-lists', '/family', '/wishlist', '/season', '/year-in-giving', '/profile', '/upgrade', '/ideas'];
 
 // Root-level paths — show brand logo on these
-const ROOT_PATHS = ['/', '/calendar', '/ideas', '/season', '/upgrade', ...MORE_PATHS];
+const ROOT_PATHS = ['/', '/calendar', '/capture', '/recipients', '/ideas', '/season', '/upgrade', ...MORE_PATHS];
 
 // Page title map for sub-pages
 const PAGE_TITLES = {
   '/events/new': 'New Occasion',
+  '/capture': 'Capture',
   '/upgrade': 'Upgrade',
   '/year-in-giving': 'Year in Giving',
 };
 
 // More drawer items (mirrors MoreSheet)
 const MORE_ITEMS = [
-  { path: '/recipients', icon: Users, label: 'People' },
   { path: '/budget', icon: PiggyBank, label: 'Budget' },
   { path: '/deliveries', icon: Package, label: 'Deliveries' },
-  { path: '/saved', icon: Bookmark, label: 'Saved' },
+  { path: '/saved', icon: Bookmark, label: 'Ideas' },
   { path: '/group-lists', icon: Gift, label: 'Groups' },
-  { path: '/restock', icon: Star, label: 'Restock' },
+  { path: '/family', icon: Users, label: 'Family' },
   { path: '/wishlist', icon: Star, label: 'Wishlist' },
   { path: '/year-in-giving', icon: Star, label: 'Year' },
   { path: '/profile', icon: User, label: 'Profile' },
@@ -69,16 +68,6 @@ export default function AppShell({ children, user }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [showMore, setShowMore] = useState(false);
-  const { data: profile } = useQuery({
-    queryKey: ['userProfile'],
-    queryFn: async () => {
-      const profiles = await base44.entities.UserProfile.filter({ created_by: user?.email });
-      return profiles[0] || null;
-    },
-    enabled: !!user?.email,
-    staleTime: 60_000,
-  });
-  const isPremium = profile?.is_premium;
   // Track the last-visited path within each tab so switching back restores it
   const tabHistory = useRef({});
 
@@ -129,14 +118,6 @@ export default function AppShell({ children, user }) {
                 <span className="font-heading font-bold text-foreground text-sm md:text-base">How Thoughtful</span>
               </Link>
               <div className="flex items-center gap-2">
-                {!isPremium && (
-                  <Link
-                    to="/upgrade"
-                    className="text-xs font-heading font-semibold text-terracotta border border-terracotta/40 px-3 py-1.5 rounded-full hover:bg-terracotta hover:text-white transition-all"
-                  >
-                    Upgrade ✨
-                  </Link>
-                )}
                 <Link
                   to="/profile"
                   className="flex items-center gap-1.5 min-h-[44px] px-2 rounded-full hover:bg-muted transition-all group"

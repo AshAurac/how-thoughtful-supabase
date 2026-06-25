@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, ChevronDown, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, X } from 'lucide-react';
 import { computeBuyDates } from '@/lib/dateUtils';
 import { LOVE_LANGUAGES } from '@/lib/catalogs';
 import NativePicker from '@/components/NativePicker';
@@ -142,54 +142,64 @@ export default function CreateEvent() {
     mutationFn: async (data) => {
       const buyDates = data.event_date ? computeBuyDates(data.event_date) : {};
       let recipientId = selectedRecipientId;
-      const event = await base44.entities.Event.create({
-        ...data,
-        recipient_id: recipientId,
-        ...buyDates,
-        reminders_sent: []
-      });
+      let createdRecipientId = null;
 
       // Keep the person profile useful when an occasion reveals birthday/context details.
       const profileUpdates = recipientUpdatesFromEvent(data, { includeExtraDetails: saveExtraToProfile });
-      if (!selectedRecipientId && data.recipient_name) {
-        const match = findRecipientMatch(data.recipient_name, recipients);
-        if (!match) {
-          const recipient = await base44.entities.Recipient.create({
-            name: data.recipient_name,
-            ...profileUpdates
-          });
-          recipientId = recipient?.id;
-        } else {
-          const existing = match.recipient;
-          recipientId = existing.id;
+      try {
+        if (!selectedRecipientId && data.recipient_name) {
+          const match = findRecipientMatch(data.recipient_name, recipients);
+          // Only exact names are linked automatically. Similar names may be different people.
+          if (!match || match.type !== 'exact') {
+            const recipient = await base44.entities.Recipient.create({
+              name: data.recipient_name.trim(),
+              ...profileUpdates
+            });
+            recipientId = recipient?.id;
+            createdRecipientId = recipient?.id;
+          } else {
+            const existing = match.recipient;
+            recipientId = existing.id;
+            const mergedUpdates = mergeRecipientUpdates(existing, profileUpdates);
+            if (Object.keys(mergedUpdates).length) {
+              await base44.entities.Recipient.update(existing.id, mergedUpdates);
+            }
+          }
+        } else if (selectedRecipientId) {
+          const existing = recipients.find(r => r.id === selectedRecipientId);
           const mergedUpdates = mergeRecipientUpdates(existing, profileUpdates);
           if (Object.keys(mergedUpdates).length) {
-            await base44.entities.Recipient.update(existing.id, mergedUpdates);
-          }
-          if (match.type === 'similar') {
-            toast(`Linked this occasion to existing person: ${existing.name}`);
+            await base44.entities.Recipient.update(selectedRecipientId, mergedUpdates);
           }
         }
-      } else if (selectedRecipientId) {
-        const existing = recipients.find(r => r.id === selectedRecipientId);
-        const mergedUpdates = mergeRecipientUpdates(existing, profileUpdates);
-        if (Object.keys(mergedUpdates).length) {
-          await base44.entities.Recipient.update(selectedRecipientId, mergedUpdates);
+
+        const event = await base44.entities.Event.create({
+          ...data,
+          recipient_id: recipientId,
+          ...buyDates,
+          reminders_sent: []
+        });
+
+        queryClient.invalidateQueries({ queryKey: ['recipients'] });
+        return event;
+      } catch (error) {
+        // Avoid leaving a newly-created person behind if the occasion fails to save.
+        if (createdRecipientId) {
+          try {
+            await base44.entities.Recipient.delete(createdRecipientId);
+          } catch {
+            // Preserve the original save error for the user.
+          }
         }
+        throw error;
       }
-
-      if (recipientId && event?.recipient_id !== recipientId) {
-        await base44.entities.Event.update(event.id, { recipient_id: recipientId });
-      }
-      queryClient.invalidateQueries({ queryKey: ['recipients'] });
-
-      return { ...event, recipient_id: recipientId || event?.recipient_id };
     },
-    onSuccess: (event) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       toast.success('Occasion added');
-      navigate(`/events/${event.id}`);
+      navigate('/');
     },
+    onError: (error) => toast.error(error?.message || 'Could not save this occasion. Please try again.'),
   });
 
   const handleSubmit = (e) => {
@@ -254,15 +264,29 @@ export default function CreateEvent() {
                     {r.relationship && <span className="text-xs text-muted-foreground">{r.relationship}</span>}
                   </button>
                 ))}
-                <div className="border-t border-border px-4 py-2">
+                <div className="border-t border-border px-4 py-2 flex items-center gap-2">
                   <input
                     autoFocus
                     value={form.recipient_name}
                     onChange={e => { set('recipient_name', e.target.value); setSelectedRecipientId(null); }}
-                    onKeyDown={e => { if (e.key === 'Enter') setShowRecipientPicker(false); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowRecipientPicker(false);
+                      }
+                    }}
                     placeholder="Or type a new name…"
-                    className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1 font-body"
+                    className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1 font-body"
                   />
+                  <button
+                    type="button"
+                    aria-label="Accept person name"
+                    onClick={() => setShowRecipientPicker(false)}
+                    className="w-9 h-9 rounded-full bg-moss text-white flex items-center justify-center"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             )}
@@ -360,15 +384,29 @@ export default function CreateEvent() {
                     {r.relationship && <span className="text-xs text-muted-foreground">{r.relationship}</span>}
                   </button>
                 ))}
-                <div className="border-t border-border px-4 py-2">
+                <div className="border-t border-border px-4 py-2 flex items-center gap-2">
                   <input
                     autoFocus
                     value={form.giver_name}
                     onChange={e => set('giver_name', e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') setShowGiverPicker(false); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowGiverPicker(false);
+                      }
+                    }}
                     placeholder="Or type a name…"
-                    className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1 font-body"
+                    className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1 font-body"
                   />
+                  <button
+                    type="button"
+                    aria-label="Accept giver name"
+                    onClick={() => setShowGiverPicker(false)}
+                    className="w-9 h-9 rounded-full bg-moss text-white flex items-center justify-center"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             )}

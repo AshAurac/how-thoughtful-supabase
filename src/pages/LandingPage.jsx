@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import { Calendar, Sparkles, Bell, Heart, Check, Star, ArrowRight, Package, Clock, DollarSign, Smile, BookOpen, Users } from 'lucide-react';
+import { PLAN_ORDER, PRICING } from '@/lib/pricing';
 
 const PAIN_POINTS = [
   { icon: Clock, text: "You remember someone's birthday at 11pm the night before and panic." },
@@ -16,74 +17,19 @@ const TESTIMONIALS = [
   { quote: "My partner thinks I'm incredibly thoughtful. They don't know about How Thoughtful 😅", name: 'Priya K.' },
 ];
 
-const PLANS = [
-  {
-    id: 'free',
-    name: 'Free',
-    tagline: 'Start being thoughtful today.',
-    monthly: { price: '$0', period: 'forever', note: 'No credit card needed.' },
-    annual: { price: '$0', period: 'forever', note: 'No credit card needed.' },
-    features: [
-      'Up to 6 occasions to track',
-      '3 AI gift ideas each month',
-      'Curated gift ideas — always free',
-      'Gift checklist & delivery tracker',
-      'Your personal wishlist with shareable link',
-      'Plan birthdays, anniversaries & special moments',
-    ],
-    cta: 'Start for free',
-    ctaStyle: 'border-2 border-terracotta text-terracotta hover:bg-terracotta hover:text-white',
-    highlight: false,
-  },
-  {
-    id: 'individual',
-    name: 'Individual',
-    tagline: 'For people who want to show up fully.',
-    monthly: { price: '$3.99', period: '/ month AUD', note: 'Cancel any time.', savings: null },
-    annual: { price: '$24.99', period: '/ year AUD', note: 'Just $2.08/month', savings: 'Save 48% ✓' },
-    features: [
-      'Unlimited occasions',
-      '30 personalised AI gift ideas per month',
-      'Smart reminders — 30, 14 & 3 days out',
-      'Full budget & delivery tracking',
-      'Invite 1 collaborator per occasion',
-      'Bulk import occasions & people',
-      'Year in Giving — your annual gifting story',
-      'All future features included',
-    ],
-    cta: 'Get Individual',
-    ctaStyle: 'bg-terracotta text-white hover:bg-terracotta-dark',
-    highlight: true,
-    badge: 'Most Popular',
-  },
-  {
-    id: 'family',
-    name: 'Family',
-    tagline: 'Thoughtfulness, shared across your whole family.',
-    monthly: { price: '$5.99', period: '/ month AUD', note: 'Cancel any time.', savings: null },
-    annual: { price: '$49.99', period: '/ year AUD', note: 'Just $4.17/month', savings: 'Save 30% ✓' },
-    features: [
-      'Everything in Individual',
-      'Up to 6 family member accounts',
-      'Up to 4 kid accounts — learn to be thoughtful',
-      'Shared family occasions & group gifting',
-      'Surprise Protection — recipients can\'t see their gifts',
-      'Invite up to 6 collaborators per occasion',
-      'Family dashboard view',
-    ],
-    cta: 'Get Family',
-    ctaStyle: 'bg-ink text-white hover:bg-ink/90',
-    highlight: false,
-    badge: 'Best for Families',
-  },
-];
-
 function PlanCard({ plan, billing, onSignup }) {
   const price = plan[billing];
+  const highlight = plan.id === 'individual';
+  const cta = plan.id === 'free' ? 'Start for free' : `Get ${plan.name}`;
+  const ctaStyle = plan.id === 'free'
+    ? 'border-2 border-terracotta text-terracotta hover:bg-terracotta hover:text-white'
+    : plan.id === 'individual'
+      ? 'bg-terracotta text-white hover:bg-terracotta-dark'
+      : 'bg-ink text-white hover:bg-ink/90';
   return (
-    <div className={`relative bg-white rounded-3xl p-7 flex flex-col ${plan.highlight ? 'border-2 border-terracotta' : 'border-2 border-sand-300'}`}>
+    <div className={`relative bg-white rounded-3xl p-7 flex flex-col ${highlight ? 'border-2 border-terracotta' : 'border-2 border-sand-300'}`}>
       {plan.badge && (
-        <div className={`absolute -top-3 left-1/2 -translate-x-1/2 text-white text-xs font-heading font-bold px-4 py-1 rounded-full whitespace-nowrap ${plan.highlight ? 'bg-terracotta' : 'bg-ink'}`}>
+        <div className={`absolute -top-3 left-1/2 -translate-x-1/2 text-white text-xs font-heading font-bold px-4 py-1 rounded-full whitespace-nowrap ${highlight ? 'bg-terracotta' : 'bg-ink'}`}>
           {plan.badge}
         </div>
       )}
@@ -107,9 +53,9 @@ function PlanCard({ plan, billing, onSignup }) {
       </ul>
       <button
         onClick={onSignup}
-        className={`w-full py-3 rounded-full font-heading font-semibold text-sm transition-all hover:-translate-y-0.5 ${plan.ctaStyle}`}
+        className={`w-full py-3 rounded-full font-heading font-semibold text-sm transition-all hover:-translate-y-0.5 ${ctaStyle}`}
       >
-        {plan.cta}
+        {cta}
       </button>
     </div>
   );
@@ -265,14 +211,14 @@ export default function LandingPage() {
               onClick={() => setBilling('annual')}
               className={`px-5 py-2 rounded-full text-sm font-heading font-semibold transition-all ${billing === 'annual' ? 'bg-white text-ink shadow-sm' : 'text-ink-soft hover:text-ink'}`}
             >
-              Annual <span className="text-moss font-bold ml-1">Save 30–48%</span>
+              Annual <span className="text-moss font-bold ml-1">Save up to 28%</span>
             </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {PLANS.map(plan => (
-            <PlanCard key={plan.id} plan={plan} billing={billing} onSignup={handleSignup} />
+          {PLAN_ORDER.map(planId => (
+            <PlanCard key={planId} plan={PRICING[planId]} billing={billing} onSignup={handleSignup} />
           ))}
         </div>
 

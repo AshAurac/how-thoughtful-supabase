@@ -23,12 +23,16 @@ const entityTableMap = {
   GiftHistory: 'gift_history',
   Recipient: 'recipients',
   SavedIdea: 'saved_ideas',
+  PlanAction: 'plan_actions',
+  Family: 'families',
+  FamilyMember: 'family_members',
+  FamilyManagedProfile: 'family_managed_profiles',
   SharedList: 'shared_lists',
   SharedListItem: 'shared_list_items',
   Wishlist: 'wishlists'
 };
 
-const createdByEntities = new Set(Object.keys(entityTableMap));
+const createdByEntities = new Set(Object.keys(entityTableMap).filter(entityName => entityName !== 'FamilyMember'));
 
 const normalizeRow = (row) => {
   if (!row || typeof row !== 'object') return row;

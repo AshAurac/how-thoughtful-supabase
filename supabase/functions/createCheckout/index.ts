@@ -1,92 +1,81 @@
 import { serve } from 'https://deno.land/std@0.203.0/http/server.ts';
-import Stripe from 'npm:stripe@14';
-import { createClient } from 'npm:@supabase/supabase-js';
+import Stripe from 'npm:stripe@18';
+import { authenticateRequest, corsHeaders, createAdminClient, errorResponse, json, readBoundedJson } from '../_shared/security.ts';
 
-const SUPABASE_URL = Deno.env.get('VITE_SUPABASE_URL') || Deno.env.get('SUPABASE_URL');
-const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY');
+const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+  apiVersion: '2026-02-25.clover' as any,
+});
 
-const firstSecret = (...names: string[]) => {
-  for (const name of names) {
-    const value = Deno.env.get(name);
-    if (value) return value;
-  }
-  return '';
+const priceFor = (key: string) => {
+  const prices: Record<string, { env: string; plan: 'individual' | 'family'; interval: 'monthly' | 'annual' }> = {
+    individual_monthly: { env: 'STRIPE_PRICE_INDIVIDUAL_MONTHLY', plan: 'individual', interval: 'monthly' },
+    individual_annual: { env: 'STRIPE_PRICE_INDIVIDUAL_ANNUAL', plan: 'individual', interval: 'annual' },
+    family_monthly: { env: 'STRIPE_PRICE_FAMILY_MONTHLY', plan: 'family', interval: 'monthly' },
+    family_annual: { env: 'STRIPE_PRICE_FAMILY_ANNUAL', plan: 'family', interval: 'annual' },
+  };
+  const mapping = prices[key];
+  if (!mapping) return null;
+  const priceId = Deno.env.get(mapping.env);
+  return priceId ? { ...mapping, priceId } : null;
 };
-
-const PRICE_IDS: Record<string, string> = {
-  monthly: firstSecret('STRIPE_PRICE_MONTHLY', 'STRIPE_MONTHLY_PRICE_ID'),
-  annual: firstSecret('STRIPE_PRICE_ANNUAL', 'STRIPE_PRICE_YEARLY', 'STRIPE_ANNUAL_PRICE_ID', 'STRIPE_YEARLY_PRICE_ID'),
-  individual_monthly: firstSecret('STRIPE_PRICE_INDIVIDUAL_MONTHLY', 'STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID', 'STRIPE_PRICE_MONTHLY'),
-  individual_annual: firstSecret('STRIPE_PRICE_INDIVIDUAL_ANNUAL', 'STRIPE_PRICE_INDIVIDUAL_YEARLY', 'STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID', 'STRIPE_INDIVIDUAL_YEARLY_PRICE_ID', 'STRIPE_PRICE_ANNUAL', 'STRIPE_PRICE_YEARLY'),
-  family_monthly: firstSecret('STRIPE_PRICE_FAMILY_MONTHLY', 'STRIPE_FAMILY_MONTHLY_PRICE_ID'),
-  family_annual: firstSecret('STRIPE_PRICE_FAMILY_ANNUAL', 'STRIPE_PRICE_FAMILY_YEARLY', 'STRIPE_FAMILY_ANNUAL_PRICE_ID', 'STRIPE_FAMILY_YEARLY_PRICE_ID')
-};
-
-const supabaseAdmin = createClient(SUPABASE_URL || '', SUPABASE_SERVICE_KEY || '');
-const stripe = new Stripe(STRIPE_SECRET_KEY || '');
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS'
-};
-
-const json = (body: Record<string, unknown>, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-  });
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    if (!STRIPE_SECRET_KEY) {
+    if (!Deno.env.get('STRIPE_SECRET_KEY')) {
       return json({ error: 'STRIPE_SECRET_KEY is not configured in Supabase secrets' }, 500);
     }
 
-    const authHeader = req.headers.get('authorization') || '';
-    const accessToken = authHeader.toLowerCase().startsWith('bearer ')
-      ? authHeader.slice(7)
-      : '';
+    const admin = createAdminClient();
+    const user = await authenticateRequest(req, admin);
+    const body = await readBoundedJson(req);
+    const product = String(body.product || '');
+    const mapping = priceFor(product);
+    if (!mapping) return json({ error: 'This plan is not available yet.' }, 400);
 
-    const { data: userResult, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
-    const user = userResult?.user;
-    if (userError || !user?.email) {
-      return json({ error: 'Please log in again before upgrading.' }, 401);
-    }
+    const origin = String(req.headers.get('origin') || '').replace(/\/$/, '');
+    const successUrl = String(body.success_url || `${origin}/upgrade?success=true&product=${product}`);
+    const cancelUrl = String(body.cancel_url || `${origin}/upgrade`);
 
-    const { product, user_email, success_url, cancel_url } = await req.json();
-    if (!product || !PRICE_IDS[product]) return json({ error: 'Invalid product' }, 400);
+    const { data: profiles, error } = await admin
+      .from('user_profiles')
+      .select('stripe_customer_id')
+      .or(`created_by.eq.${user.email},email.eq.${user.email}`)
+      .limit(1);
+    if (error) throw error;
 
-    const priceId = PRICE_IDS[product];
-    if (!priceId || priceId.includes('placeholder')) {
-      return json({ error: `Stripe price for ${product} is not configured` }, 500);
-    }
-
-    const [plan, billing] = product.includes('_') ? product.split('_') : ['individual', product];
-    const customerEmail = user.email || user_email || '';
-
-    const sessionParams: any = {
-      payment_method_types: ['card'],
-      line_items: [{ price: priceId, quantity: 1 }],
+    const params: Stripe.Checkout.SessionCreateParams = {
       mode: 'subscription',
-      success_url: success_url || `${req.headers.get('origin')}/upgrade?success=true&product=${product}`,
-      cancel_url: cancel_url || `${req.headers.get('origin')}/upgrade`,
-      metadata: { product, plan, billing, user_email: customerEmail },
+      line_items: [{ price: mapping.priceId, quantity: 1 }],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      allow_promotion_codes: true,
+      metadata: {
+        plan: mapping.plan,
+        billing_interval: mapping.interval,
+        price_id: mapping.priceId,
+        user_email: user.email || '',
+      },
       subscription_data: {
-        metadata: { product, plan, billing, user_email: customerEmail }
-      }
+        metadata: {
+          plan: mapping.plan,
+          billing_interval: mapping.interval,
+          price_id: mapping.priceId,
+          user_email: user.email || '',
+        },
+      },
     };
-    if (customerEmail) sessionParams.customer_email = customerEmail;
 
-    const session = await stripe.checkout.sessions.create(sessionParams);
+    if (profiles?.[0]?.stripe_customer_id) {
+      params.customer = profiles[0].stripe_customer_id;
+    } else {
+      params.customer_email = user.email || undefined;
+    }
+
+    const session = await stripe.checkout.sessions.create(params);
     return json({ url: session.url, session_id: session.id });
-  } catch (err) {
-    console.error('createCheckout error', err);
-    return json({ error: err.message }, 500);
+  } catch (error) {
+    return errorResponse(error);
   }
 });

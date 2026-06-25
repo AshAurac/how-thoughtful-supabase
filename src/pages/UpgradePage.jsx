@@ -5,62 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { Check, Home, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { isEmailVerified } from '@/lib/authStatus';
-
-const PLANS = [
-  {
-    id: 'free',
-    name: 'Free',
-    tagline: 'Start being thoughtful today.',
-    monthly: { price: '$0', period: 'forever', note: '' },
-    annual: { price: '$0', period: 'forever', note: '' },
-    features: [
-      'Up to 6 occasions to track',
-      '3 AI gift ideas each month',
-      'Curated gift ideas — always free',
-      'Gift checklist & delivery tracker',
-      'Personal wishlist with shareable link',
-    ],
-    highlight: false,
-    ctaLabel: 'You\'re on Free',
-    isFree: true,
-  },
-  {
-    id: 'individual',
-    name: 'Individual',
-    tagline: 'For people who want to show up fully.',
-    monthly: { price: '$3.99', period: '/ month AUD', note: 'Cancel any time.', savings: null },
-    annual: { price: '$24.99', period: '/ year AUD', note: 'Just $2.08/month ☕', savings: 'Save 48% ✓' },
-    features: [
-      'Unlimited occasions',
-      '30 personalised AI gift ideas per month',
-      'Smart reminders — 30, 14 & 3 days out',
-      'Full budget & delivery tracking',
-      'Invite 1 collaborator per occasion',
-      'Bulk import occasions & people',
-      'Year in Giving — your annual gifting story',
-      'All future features included',
-    ],
-    highlight: true,
-    badge: 'Most Popular',
-  },
-  {
-    id: 'family',
-    name: 'Family',
-    tagline: 'Thoughtfulness, shared across your whole family.',
-    monthly: { price: '$5.99', period: '/ month AUD', note: 'Cancel any time.', savings: null },
-    annual: { price: '$49.99', period: '/ year AUD', note: 'Just $4.17/month', savings: 'Save 30% ✓' },
-    features: [
-      'Everything in Individual',
-      'Up to 6 family member accounts',
-      'Up to 4 kid accounts — learn to be thoughtful',
-      'Shared family occasions & group gifting',
-      'Surprise Protection — recipients can\'t see their gifts',
-      'Invite up to 6 collaborators per occasion',
-    ],
-    highlight: false,
-    badge: 'Best for Families',
-  },
-];
+import { PLAN_ORDER, PRICING, planCheckoutKey } from '@/lib/pricing';
 
 function CheckoutButton({ product, billing, label, className, user, onBlocked }) {
   const [loading, setLoading] = useState(false);
@@ -89,7 +34,7 @@ function CheckoutButton({ product, billing, label, className, user, onBlocked })
     setLoading(true);
     try {
       const res = await base44.functions.invoke('createCheckout', {
-        product: `${product}_${billing}`,
+        product: planCheckoutKey(product, billing),
         user_email: user?.email || '',
         success_url: `${window.location.origin}/upgrade?success=true&product=${product}`,
         cancel_url: `${window.location.origin}/upgrade`,
@@ -155,7 +100,7 @@ export default function UpgradePage({ user }) {
       <div className="text-center">
         <p className="font-accent text-2xl text-ink-soft mb-1">upgrade</p>
         <h1 className="font-heading font-bold text-3xl text-foreground">Be more thoughtful</h1>
-        <p className="text-muted-foreground mt-2 mb-6">Simple, fair pricing. Cancel any time.</p>
+        <p className="text-muted-foreground mt-2 mb-6">Simple AUD pricing for thoughtful planning. Cancel any time.</p>
 
         {/* Billing toggle */}
         <div className="inline-flex bg-muted rounded-full p-1">
@@ -169,7 +114,7 @@ export default function UpgradePage({ user }) {
             onClick={() => setBilling('annual')}
             className={`px-5 py-2 rounded-full text-sm font-heading font-semibold transition-all ${billing === 'annual' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
           >
-            Annual <span className="text-moss font-bold ml-1">Save up to 48%</span>
+            Annual <span className="text-moss font-bold ml-1">Save up to 28%</span>
           </button>
         </div>
       </div>
@@ -177,27 +122,30 @@ export default function UpgradePage({ user }) {
       {isPremium && (
         <div className="bg-sand-100 dark:bg-muted border border-sand-300 dark:border-border rounded-2xl p-4 text-center">
           <p className="font-heading font-semibold text-foreground">
-            ✨ You have {premiumType === 'annual' ? 'an Annual' : 'a Monthly'} subscription
+            ✨ You have {premiumType?.includes('annual') ? 'an Annual' : 'a Monthly'} subscription
           </p>
         </div>
       )}
 
       {/* Plan cards */}
       <div className="space-y-4">
-        {PLANS.map(plan => {
+        {PLAN_ORDER.map(planId => {
+          const plan = PRICING[planId];
           const price = plan[billing];
+          const isFree = plan.id === 'free';
+          const highlight = plan.id === 'individual';
           const isActive = isPremium && (premiumType === plan.id || premiumType?.startsWith(plan.id));
           return (
             <div
               key={plan.id}
               className={`rounded-3xl p-6 relative mt-3 bg-white dark:bg-card ${
-                plan.highlight
+                highlight
                   ? 'border-2 border-terracotta'
                   : 'border-2 border-sand-300 dark:border-border'
               }`}
             >
               {plan.badge && (
-                <div className={`absolute -top-3 left-1/2 -translate-x-1/2 text-white text-xs font-heading font-bold px-3 py-1 rounded-full whitespace-nowrap flex items-center gap-1 ${plan.highlight ? 'bg-terracotta' : 'bg-ink'}`}>
+                <div className={`absolute -top-3 left-1/2 -translate-x-1/2 text-white text-xs font-heading font-bold px-3 py-1 rounded-full whitespace-nowrap flex items-center gap-1 ${highlight ? 'bg-terracotta' : 'bg-ink'}`}>
                   <Star className="w-3 h-3" /> {plan.badge}
                 </div>
               )}
@@ -226,7 +174,7 @@ export default function UpgradePage({ user }) {
                 ))}
               </ul>
 
-              {plan.isFree ? (
+              {isFree ? (
                 <div className="w-full text-center py-3 rounded-full text-sm font-medium bg-sand-100 dark:bg-muted text-ink-soft dark:text-muted-foreground">
                   {isActive || !isPremium ? 'Your current plan' : 'Downgrade'}
                 </div>
@@ -242,7 +190,7 @@ export default function UpgradePage({ user }) {
                   onBlocked={() => setShowVerificationModal(true)}
                   label={`Get ${plan.name} — ${billing === 'annual' ? 'best value' : 'monthly'}`}
                   className={`w-full py-3.5 rounded-full font-heading font-semibold transition-all hover:-translate-y-0.5 text-sm ${
-                    plan.highlight
+                    highlight
                       ? 'bg-terracotta text-white hover:bg-terracotta-dark'
                       : plan.id === 'family'
                         ? 'bg-ink text-white hover:bg-ink/90'

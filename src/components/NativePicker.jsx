@@ -21,6 +21,11 @@ export default function NativePicker({ value, onChange, options, placeholder = '
     setSearch('');
   };
 
+  const close = () => {
+    setOpen(false);
+    setSearch('');
+  };
+
   return (
     <>
       <button
@@ -35,7 +40,7 @@ export default function NativePicker({ value, onChange, options, placeholder = '
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end" onClick={() => { setOpen(false); setSearch(''); }}>
+        <div className="fixed inset-0 z-50 flex items-end" onClick={close}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div
             className="relative w-full bg-card rounded-t-3xl shadow-2xl flex flex-col"
@@ -50,12 +55,24 @@ export default function NativePicker({ value, onChange, options, placeholder = '
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-3 border-b border-border">
               <h3 className="font-heading font-semibold text-foreground">{label || placeholder}</h3>
-              <button
-                onClick={() => { setOpen(false); setSearch(''); }}
-                className="p-2 rounded-full hover:bg-muted transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
-              >
-                <X className="w-5 h-5 text-muted-foreground" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="Accept selection"
+                  onClick={close}
+                  className="p-2 rounded-full bg-moss text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
+                >
+                  <Check className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Close picker"
+                  onClick={close}
+                  className="p-2 rounded-full hover:bg-muted transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
+                >
+                  <X className="w-5 h-5 text-muted-foreground" />
+                </button>
+              </div>
             </div>
 
             {/* Search */}
@@ -67,6 +84,14 @@ export default function NativePicker({ value, onChange, options, placeholder = '
                     autoFocus
                     value={search}
                     onChange={e => setSearch(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && filtered[0]) {
+                        e.preventDefault();
+                        pick(filtered[0].value);
+                      } else if (e.key === 'Escape') {
+                        close();
+                      }
+                    }}
                     placeholder="Search..."
                     className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none font-body"
                   />
