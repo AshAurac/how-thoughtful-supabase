@@ -36,6 +36,16 @@ function UpcomingByMonth({ upcoming }) {
   const groups = groupByMonth(upcoming);
   const [selectedKey, setSelectedKey] = useState(() => groups.length > 0 ? groups[0][0] : null);
 
+  useEffect(() => {
+    if (groups.length === 0) {
+      setSelectedKey(null);
+      return;
+    }
+    if (!selectedKey || !groups.some(([key]) => key === selectedKey)) {
+      setSelectedKey(groups[0][0]);
+    }
+  }, [groups, selectedKey]);
+
   if (upcoming.length === 0) {
     return (
       <div className="bg-muted border border-border rounded-2xl p-6 text-center">

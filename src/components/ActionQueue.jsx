@@ -37,12 +37,12 @@ function computeScore(event) {
 
 
 export default function ActionQueue({ events, gifts }) {
-  // Only show future events (within 90 days)
+  // Show the next future events, even when nothing is urgent yet.
   const active = events
     .filter(e => {
       if (e.completed || !isEventVisible(e)) return false;
       const d = daysUntil(e.event_date);
-      return d !== null && d >= 0 && d <= 90;
+      return d !== null && d >= 0 && d <= 365 * 3;
     })
     .sort((a, b) => computeScore(a) - computeScore(b))
     .slice(0, 6);
