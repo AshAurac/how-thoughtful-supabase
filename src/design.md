@@ -262,8 +262,8 @@ Annual savings: Individual saves about 28%, Family saves about 25%.
 | `createCheckout` | Creates Stripe Checkout session for Individual/Family plans |
 | `stripeWebhook` | Handles Stripe subscription webhooks and entitlement changes |
 | `createPortalSession` | Creates a Stripe Customer Portal session |
-| `capturePlan` | Analyses typed/spoken brain dumps into reviewable plan cards |
-| `continueCapture` | Adds one follow-up answer to an in-progress capture |
+| `capturePlan` | Analyses typed/spoken brain dumps into reviewable plan cards; typed extraction uses NVIDIA when `NVIDIA_API_KEY` is configured |
+| `continueCapture` | Adds one follow-up answer to an in-progress capture using the same capture AI provider |
 | `commitCapturePlan` | Atomically saves reviewed people, occasions, ideas, and actions |
 | `familyMembership` | Creates families, invites/removes adults, and manages kid profiles |
 | `sendEventReminders` | Sends email reminders at 30/14/3 days before occasions |

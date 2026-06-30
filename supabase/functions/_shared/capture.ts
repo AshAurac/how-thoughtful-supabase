@@ -2,6 +2,11 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const EXTRACT_MODEL = Deno.env.get('OPENAI_CAPTURE_MODEL') || 'gpt-5.4-nano';
 const FALLBACK_MODEL = Deno.env.get('OPENAI_CAPTURE_FALLBACK_MODEL') || 'gpt-5.4-mini';
 const TRANSCRIBE_MODEL = Deno.env.get('OPENAI_TRANSCRIBE_MODEL') || 'gpt-4o-mini-transcribe';
+const AI_PROVIDER = (Deno.env.get('AI_PROVIDER') || '').toLowerCase();
+const NVIDIA_API_KEY = Deno.env.get('NVIDIA_API_KEY') || '';
+const NVIDIA_BASE_URL = Deno.env.get('NVIDIA_BASE_URL') || 'https://integrate.api.nvidia.com/v1';
+const NVIDIA_CAPTURE_MODEL = Deno.env.get('NVIDIA_CAPTURE_MODEL') || Deno.env.get('NVIDIA_MODEL') || 'meta/llama-3.1-70b-instruct';
+const NVIDIA_CAPTURE_FALLBACK_MODEL = Deno.env.get('NVIDIA_CAPTURE_FALLBACK_MODEL') || NVIDIA_CAPTURE_MODEL;
 
 export type CaptureDraft = {
   people: Array<Record<string, unknown>>;
@@ -88,7 +93,10 @@ export async function transcribeAudio(audioBase64: string, mimeType = 'audio/web
 }
 
 export async function extractCapture(textInput: string, existingDraft?: CaptureDraft, answer?: string) {
-  if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured');
+  const provider = resolveCaptureProvider();
+  const primaryModel = provider === 'nvidia' ? NVIDIA_CAPTURE_MODEL : EXTRACT_MODEL;
+  const fallbackModel = provider === 'nvidia' ? NVIDIA_CAPTURE_FALLBACK_MODEL : FALLBACK_MODEL;
+
   const prompt = [
     'You extract gifting plans for How Thoughtful. Return valid JSON only.',
     'Never guess essential details. If a recipient, occasion type, or date is missing, leave it blank and add it to missing.',
@@ -103,17 +111,72 @@ export async function extractCapture(textInput: string, existingDraft?: CaptureD
     `User text: ${textInput}`,
   ].filter(Boolean).join('\n');
 
-  const first = await callOpenAI(EXTRACT_MODEL, prompt);
+  const first = await callCaptureModel(provider, primaryModel, prompt);
   const parsed = parseJson(first);
   if (parsed) return validateCaptureDraft(parsed);
 
-  const fallback = await callOpenAI(FALLBACK_MODEL, `${prompt}\nYour previous response failed JSON validation. Return strict JSON only.`);
+  const fallback = await callCaptureModel(provider, fallbackModel, `${prompt}\nYour previous response failed JSON validation. Return strict JSON only.`);
   const fallbackParsed = parseJson(fallback);
   if (!fallbackParsed) throw new Error('Capture analysis failed validation');
   return validateCaptureDraft(fallbackParsed);
 }
 
+function resolveCaptureProvider() {
+  if (AI_PROVIDER === 'nvidia' || AI_PROVIDER === 'openai') return AI_PROVIDER;
+  if (NVIDIA_API_KEY) return 'nvidia';
+  return 'openai';
+}
+
+async function callCaptureModel(provider: 'nvidia' | 'openai', model: string, input: string) {
+  if (provider === 'nvidia') return callNvidia(model, input);
+  return callOpenAI(model, input);
+}
+
+async function callNvidia(model: string, input: string) {
+  if (!NVIDIA_API_KEY) throw new Error('NVIDIA_API_KEY is not configured');
+
+  const payload = {
+    model,
+    messages: [
+      { role: 'system', content: 'Return valid JSON only. Do not include markdown fences or commentary.' },
+      { role: 'user', content: input },
+    ],
+    temperature: 0.1,
+    max_tokens: 1800,
+  };
+
+  const response = await fetch(`${NVIDIA_BASE_URL.replace(/\/$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${NVIDIA_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  let result: Record<string, unknown> = {};
+  try {
+    result = await response.json();
+  } catch {
+    // Fall through to the response status check below.
+  }
+
+  if (!response.ok) {
+    const message = typeof result?.error === 'object' && result.error && 'message' in result.error
+      ? String((result.error as { message?: unknown }).message)
+      : `NVIDIA request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  const choices = Array.isArray(result.choices) ? result.choices : [];
+  const firstChoice = choices[0] as Record<string, unknown> | undefined;
+  const message = firstChoice?.message as Record<string, unknown> | undefined;
+  return typeof message?.content === 'string' ? message.content : '';
+}
+
 async function callOpenAI(model: string, input: string) {
+  if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured');
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
@@ -149,4 +212,4 @@ function parseJson(raw: string) {
   }
 }
 
-export const modelName = EXTRACT_MODEL;
+export const modelName = resolveCaptureProvider() === 'nvidia' ? NVIDIA_CAPTURE_MODEL : EXTRACT_MODEL;
