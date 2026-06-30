@@ -20,10 +20,12 @@ export default function CalendarPage({ user }) {
   const [current, setCurrent] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
 
-  const { data: events = [] } = useQuery({
+  const { data: events = [], error: eventsError, isLoading: eventsLoading } = useQuery({
     queryKey: ['events', user?.email],
     queryFn: () => base44.entities.Event.filter({ created_by: user?.email }, 'event_date'),
     enabled: !!user?.email,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const { onTouchStart, onTouchMove, onTouchEnd, indicatorRef } = usePullToRefresh(async () => {
@@ -58,6 +60,19 @@ export default function CalendarPage({ user }) {
         <p className="font-accent text-muted-foreground text-lg">plan ahead</p>
         <h1 className="font-heading font-bold text-2xl text-foreground">Calendar</h1>
       </div>
+
+      {eventsError && (
+        <div className="bg-muted border border-border rounded-2xl p-4">
+          <p className="font-heading font-semibold text-foreground">Couldn’t load occasions</p>
+          <p className="text-sm text-muted-foreground mt-1">{eventsError.message}</p>
+        </div>
+      )}
+
+      {eventsLoading && (
+        <div className="bg-muted border border-border rounded-2xl p-4 text-sm text-muted-foreground">
+          Loading occasions…
+        </div>
+      )}
 
       {/* Month nav */}
       <div className="flex items-center justify-between">

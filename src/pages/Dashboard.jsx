@@ -191,20 +191,15 @@ export default function Dashboard({ user }) {
     }
   };
 
-  const { data: ownEvents = [] } = useQuery({
+  const { data: ownEvents = [], error: ownEventsError, isLoading: eventsLoading } = useQuery({
     queryKey: ['events', user?.email],
     queryFn: () => base44.entities.Event.filter({ created_by: user?.email }, '-event_date'),
     enabled: !!user?.email,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
-  const { data: sharedEvents = [] } = useQuery({
-    queryKey: ['sharedEvents', user?.email],
-    queryFn: () => base44.entities.Event.filter({ collaborator_emails: user?.email }, '-event_date'),
-    enabled: !!user?.email,
-  });
-
-  const ownIds = new Set(ownEvents.map(e => e.id));
-  const events = visibleActiveEvents([...ownEvents, ...sharedEvents.filter(e => !ownIds.has(e.id))]);
+  const events = visibleActiveEvents(ownEvents);
 
   const { data: gifts = [] } = useQuery({
     queryKey: ['gifts', user?.email],
@@ -327,7 +322,18 @@ export default function Dashboard({ user }) {
         </div>
 
         {activeTab === 'upcoming' && (
-          <UpcomingByMonth upcoming={upcoming} />
+          eventsLoading ? (
+            <div className="bg-muted border border-border rounded-2xl p-6 text-center">
+              <p className="text-sm text-muted-foreground">Loading occasions…</p>
+            </div>
+          ) : ownEventsError ? (
+            <div className="bg-muted border border-border rounded-2xl p-6 text-center">
+              <p className="font-heading font-semibold text-foreground">Couldn’t load occasions</p>
+              <p className="text-sm text-muted-foreground mt-1">{ownEventsError.message}</p>
+            </div>
+          ) : (
+            <UpcomingByMonth upcoming={upcoming} />
+          )
         )}
 
         {activeTab === 'priority' && (
@@ -350,7 +356,16 @@ export default function Dashboard({ user }) {
                 </Link>
               </div>
             )}
-            {events.length > 0
+            {eventsLoading ? (
+                <div className="bg-muted border border-border rounded-2xl p-6 text-center">
+                  <p className="text-sm text-muted-foreground">Loading occasions…</p>
+                </div>
+              ) : ownEventsError ? (
+                <div className="bg-muted border border-border rounded-2xl p-6 text-center">
+                  <p className="font-heading font-semibold text-foreground">Couldn’t load occasions</p>
+                  <p className="text-sm text-muted-foreground mt-1">{ownEventsError.message}</p>
+                </div>
+              ) : events.length > 0
               ? <ActionQueue events={events} gifts={gifts} />
               : (
                 <div className="bg-muted border border-border rounded-2xl p-6 text-center">
