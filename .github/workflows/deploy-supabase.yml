@@ -25,6 +25,7 @@ jobs:
         run: |
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20260620074530_recipient_ai_and_event_lifecycle.sql
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20260625120000_conversational_family_pricing_release.sql
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20260701093000_fix_family_members_rls_recursion.sql
 
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v1
