@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Mic, MicOff, Sparkles, Check, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
@@ -39,18 +40,20 @@ function ReviewList({ title, items, empty }) {
 
 export default function ConversationalCapture({ compact = false }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [text, setText] = useState('');
   const [draft, setDraft] = useState(null);
   const [allowance, setAllowance] = useState(null);
   const [meta, setMeta] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState(null);
   const [recording, setRecording] = useState(false);
   const [answer, setAnswer] = useState('');
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
+  const loading = Boolean(loadingAction);
 
   const analyse = async (payload) => {
-    setLoading(true);
+    setLoadingAction('sort');
     try {
       const result = await base44.functions.invoke('capturePlan', payload);
       setDraft(result.draft);
@@ -60,10 +63,11 @@ export default function ConversationalCapture({ compact = false }) {
         model: result.model,
         transcript_sha256: result.transcript_sha256,
       });
+      toast.success('Sorted into a draft plan — check it before saving.');
     } catch (error) {
       toast.error(error.message || 'Could not understand that yet.');
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   };
 
@@ -109,7 +113,7 @@ export default function ConversationalCapture({ compact = false }) {
 
   const continueCapture = async () => {
     if (!answer.trim()) return;
-    setLoading(true);
+    setLoadingAction('clarify');
     try {
       const result = await base44.functions.invoke('continueCapture', { draft, answer });
       setDraft(result.draft);
@@ -117,24 +121,35 @@ export default function ConversationalCapture({ compact = false }) {
     } catch (error) {
       toast.error(error.message || 'Could not add that detail.');
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   };
 
   const commit = async () => {
-    setLoading(true);
+    setLoadingAction('save');
     try {
-      await base44.functions.invoke('commitCapturePlan', {
+      const response = await base44.functions.invoke('commitCapturePlan', {
         draft,
         ...meta,
         idempotency_key: crypto.randomUUID(),
       });
-      toast.success('Your plan is ready.');
+      const eventIds = response?.result?.event_ids || [];
+      if (!Array.isArray(eventIds) || eventIds.length === 0) {
+        throw new Error('Nothing was saved yet — add at least one occasion with a person and date.');
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['events'] }),
+        queryClient.invalidateQueries({ queryKey: ['recipients'] }),
+        queryClient.invalidateQueries({ queryKey: ['planActions'] }),
+        queryClient.invalidateQueries({ queryKey: ['savedIdeas'] }),
+        queryClient.invalidateQueries({ queryKey: ['userProfile'] }),
+      ]);
+      toast.success('Saved — your occasions and people are ready.');
       navigate('/');
     } catch (error) {
       toast.error(error.message || 'Could not save the plan.');
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   };
 
@@ -161,7 +176,7 @@ export default function ConversationalCapture({ compact = false }) {
             disabled={loading}
             className="flex-1 bg-terracotta text-white rounded-full py-3 font-heading font-semibold hover:bg-terracotta-dark disabled:opacity-60"
           >
-            {loading ? 'Reading it…' : 'Understand this'}
+            {loadingAction === 'sort' ? 'Sorting it…' : 'Sort this into a plan'}
           </button>
           <button
             type="button"
@@ -210,19 +225,24 @@ export default function ConversationalCapture({ compact = false }) {
                   className="flex-1 rounded-full border border-border bg-background px-4 py-2 text-sm outline-none"
                 />
                 <button onClick={continueCapture} disabled={loading} className="bg-ink text-white rounded-full px-4 font-heading font-semibold text-sm">
-                  Add
+                  {loadingAction === 'clarify' ? 'Adding…' : 'Add'}
                 </button>
               </div>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={commit}
-              disabled={loading}
-              className="w-full bg-ink text-white rounded-2xl py-4 font-heading font-bold hover:bg-ink/90 disabled:opacity-60"
-            >
-              {loading ? 'Making your plan…' : 'Make my plan'}
-            </button>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground bg-muted rounded-2xl px-4 py-3">
+                Just need the basics for now — you can update names, dates, gift ideas, budgets, and notes later.
+              </p>
+              <button
+                type="button"
+                onClick={commit}
+                disabled={loading}
+                className="w-full bg-ink text-white rounded-2xl py-4 font-heading font-bold hover:bg-ink/90 disabled:opacity-60"
+              >
+                {loadingAction === 'save' ? 'Saving your plan…' : 'Make my plan'}
+              </button>
+            </div>
           )}
         </div>
       )}

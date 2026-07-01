@@ -505,6 +505,13 @@ begin
           birth_year = coalesce(nullif(person ->> 'birth_year', '')::integer, birth_year),
           birthday_month = coalesce(nullif(person ->> 'birthday_month', '')::integer, birthday_month),
           birthday_day = coalesce(nullif(person ->> 'birthday_day', '')::integer, birthday_day),
+          interests = case
+            when jsonb_typeof(person -> 'interests') = 'array' and jsonb_array_length(person -> 'interests') > 0
+              then array(select jsonb_array_elements_text(person -> 'interests'))
+            else interests
+          end,
+          gift_likes = coalesce(nullif(person ->> 'gift_likes', ''), gift_likes),
+          gift_avoidances = coalesce(nullif(person ->> 'gift_avoidances', ''), gift_avoidances),
           notes = concat_ws(E'\n', nullif(notes, ''), nullif(person ->> 'notes', ''))
       where id = recipient_id;
     end if;
@@ -575,6 +582,10 @@ begin
       );
     end if;
   end loop;
+
+  if created_occasion_count = 0 then
+    raise exception 'at least one complete occasion is required' using errcode = 'P0001';
+  end if;
 
   for action_item in select * from jsonb_array_elements(coalesce(p_payload -> 'actions', '[]'::jsonb))
   loop

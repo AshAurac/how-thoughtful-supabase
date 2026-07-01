@@ -29,7 +29,10 @@ export function validateCaptureDraft(value: unknown): CaptureDraft {
   const occasions = Array.isArray(draft.occasions) ? draft.occasions : [];
   const ideas = Array.isArray(draft.ideas) ? draft.ideas : [];
   const actions = Array.isArray(draft.actions) ? draft.actions : [];
-  const missing = deterministicMissing({ people, occasions });
+  const aiMissing = Array.isArray(draft.missing)
+    ? draft.missing.filter(item => typeof item === 'string' && item.trim()).map(item => item.trim())
+    : [];
+  const missing = [...new Set([...deterministicMissing({ people, occasions }), ...aiMissing])];
   const question = typeof draft.follow_up_question === 'string' && draft.follow_up_question.trim()
     ? draft.follow_up_question.trim()
     : phraseFallbackQuestion(missing);
@@ -100,6 +103,8 @@ export async function extractCapture(textInput: string, existingDraft?: CaptureD
   const prompt = [
     'You extract gifting plans for How Thoughtful. Return valid JSON only.',
     'Never guess essential details. If a recipient, occasion type, or date is missing, leave it blank and add it to missing.',
+    'If a pronoun, relationship, budget, gift idea, age, birthday, or preference could belong to more than one person, do not assign it. Add the ambiguity to missing and ask one clarification question.',
+    'If the input is a basic but clear occasion, capture the basics and do not ask for optional details. Users can update details later.',
     'Use ISO YYYY-MM-DD dates only when the user gave enough information. Relative dates may be resolved only if unambiguous from current date.',
     'People fields: name, relationship, age, birth_year, birthday_month, birthday_day, interests, notes, gift_likes, gift_avoidances.',
     'Occasion fields: recipient_name, occasion, event_date, budget, priority, recurring, visibility, notes, age_turning, starter_idea.',

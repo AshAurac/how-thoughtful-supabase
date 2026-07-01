@@ -31,6 +31,9 @@ serve(async (req) => {
       p_idempotency_key: String(body.idempotency_key || safeUuid()),
     });
     if (error) throw error;
+    if (!Array.isArray(data?.event_ids) || data.event_ids.length === 0) {
+      return json({ error: 'Nothing was saved yet — add at least one occasion with a person and date.' }, 400);
+    }
 
     return json({ result: data });
   } catch (error) {
