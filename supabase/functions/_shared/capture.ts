@@ -5,8 +5,12 @@ const TRANSCRIBE_MODEL = Deno.env.get('OPENAI_TRANSCRIBE_MODEL') || 'gpt-4o-mini
 const AI_PROVIDER = (Deno.env.get('AI_PROVIDER') || '').toLowerCase();
 const NVIDIA_API_KEY = Deno.env.get('NVIDIA_API_KEY') || '';
 const NVIDIA_BASE_URL = Deno.env.get('NVIDIA_BASE_URL') || 'https://integrate.api.nvidia.com/v1';
-const NVIDIA_CAPTURE_MODEL = Deno.env.get('NVIDIA_CAPTURE_MODEL') || Deno.env.get('NVIDIA_MODEL') || 'meta/llama-3.1-70b-instruct';
+const NVIDIA_CAPTURE_MODEL = Deno.env.get('NVIDIA_CAPTURE_MODEL') || 'meta/llama-3.1-8b-instruct';
 const NVIDIA_CAPTURE_FALLBACK_MODEL = Deno.env.get('NVIDIA_CAPTURE_FALLBACK_MODEL') || NVIDIA_CAPTURE_MODEL;
+const configuredCaptureTimeout = Number(Deno.env.get('CAPTURE_TIMEOUT_MS') || 55_000);
+const CAPTURE_TIMEOUT_MS = Number.isFinite(configuredCaptureTimeout) && configuredCaptureTimeout >= 10_000
+  ? configuredCaptureTimeout
+  : 55_000;
 
 export type CaptureDraft = {
   people: Array<Record<string, unknown>>;
@@ -133,8 +137,24 @@ function resolveCaptureProvider() {
 }
 
 async function callCaptureModel(provider: 'nvidia' | 'openai', model: string, input: string) {
-  if (provider === 'nvidia') return callNvidia(model, input);
+  if (provider === 'nvidia') {
+    try {
+      return await callNvidia(model, input);
+    } catch (error) {
+      if (OPENAI_API_KEY && isTimeoutError(error)) return callOpenAI(EXTRACT_MODEL, input);
+      if (isTimeoutError(error)) {
+        throw new Error('Sorting took too long. Please try again with a shorter note, or try again in a moment.');
+      }
+      throw error;
+    }
+  }
   return callOpenAI(model, input);
+}
+
+function isTimeoutError(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase();
+  const name = error instanceof Error ? error.name.toLowerCase() : '';
+  return name.includes('timeout') || name.includes('abort') || message.includes('timeout') || message.includes('aborted') || message.includes('signal');
 }
 
 async function callNvidia(model: string, input: string) {
@@ -147,18 +167,26 @@ async function callNvidia(model: string, input: string) {
       { role: 'user', content: input },
     ],
     temperature: 0.1,
-    max_tokens: 1800,
+    max_tokens: 1000,
   };
 
-  const response = await fetch(`${NVIDIA_BASE_URL.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${NVIDIA_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(30_000),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${NVIDIA_BASE_URL.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${NVIDIA_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(CAPTURE_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      throw new Error('Sorting took too long. Please try again with a shorter note, or try again in a moment.');
+    }
+    throw error;
+  }
 
   let result: Record<string, unknown> = {};
   try {
